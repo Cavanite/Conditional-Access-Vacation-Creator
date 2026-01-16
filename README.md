@@ -18,19 +18,6 @@ The **Conditional Access Vacation Creator** creates geofencing Conditional Acces
 - **Main Policy Exclusion**: Automatically excludes users from your main geofencing policy
 - **Modern GUI**: User-friendly Windows interface with status updates
 
-## Prerequisites
-
-- Windows 10/11 or Windows Server 2016+
-- PowerShell 5.1 or higher
-- Microsoft Entra ID (Azure AD) with Conditional Access licensing (P1 or higher)
-- Named Locations configured in Entra ID
-- Global Administrator or Conditional Access Administrator role
-
-**Required PowerShell Modules** (auto-installed if missing):
-- `Microsoft.Graph.Authentication`
-- `Microsoft.Graph.Users`
-- `Microsoft.Graph.Identity.SignIns`
-
 ## Installation
 
 ```powershell
@@ -51,37 +38,6 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
    - End Date (format: dd-mm-yyyy)
 6. **Create Policy**: Click "Create CA Policy"
 7. **Enable**: Go to Entra ID portal and enable the policy after review
-
-## ⚙️ How It Works
-
-### Policy Architecture
-
-```
-┌─────────────────────────────────────────────────┐
-│       Main Geofencing Policy                    │
-│  (Blocks all countries in blocklist)            │
-│                                                  │
-│  Excluded Users:                                │
-│    - Break-glass accounts                       │
-│    - Service accounts                           │
-│    - Users on vacation (auto-added) ✓          │
-└─────────────────────────────────────────────────┘
-                      │
-                      │
-                      ▼
-┌─────────────────────────────────────────────────┐
-│    Vacation Mode Policy (New)                   │
-│  GEO-username-COUNTRY-TICKET-DATE-VACATIONMODE  │
-│                                                  │
-│  Conditions:                                     │
-│    - Users: Selected vacation users             │
-│    - Locations: All EXCEPT vacation country     │
-│    - Applications: All cloud apps               │
-│                                                  │
-│  Control:                                        │
-│    - Action: BLOCK access                       │
-└─────────────────────────────────────────────────┘
-```
 
 ### Technical Flow
 
@@ -112,26 +68,6 @@ The tool creates a Conditional Access policy that:
 - Single user: `GEO-jdoe-Spain-INC123456-31-12-2026-VACATIONMODE`
 - Multiple users: `GEO-jdoe-Plus2-Spain-INC123456-31-12-2026-VACATIONMODE`
 ---
-
-#### 🔴 Modules installation fails
-
-**Cause**: Insufficient permissions or network issues
-
-**Solution**:
-1. Run PowerShell as Administrator
-2. Set execution policy: `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`
-3. Check internet connectivity
-4. Manually install: `Install-Module Microsoft.Graph -Scope CurrentUser`
-
----
-
-### Debug Mode
-
-Run the script with verbose logging:
-
-```powershell
-.\Run-VacationMode.ps1 -LogLevel Debug
-```
 
 ### Support Resources
 
