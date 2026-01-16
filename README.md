@@ -2,7 +2,7 @@
 
 A PowerShell-based GUI tool for creating Microsoft Entra ID (Azure AD) Conditional Access policies for users traveling internationally.
 
-![Application Screenshot](Resources/screenshot.png)
+![Application Screenshot](Conditional%20Access%20Vacation%20Creator/Resources/screenshot.png)
 
 ## Overview
 
