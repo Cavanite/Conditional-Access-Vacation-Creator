@@ -8,16 +8,6 @@ A PowerShell-based GUI tool for creating Microsoft Entra ID (Azure AD) Condition
 
 The **Conditional Access Vacation Creator** creates geofencing Conditional Access policies that block access from all locations *except* the vacation destination. When users travel internationally, this tool helps maintain security by restricting their access to only their travel location.
 
-## Features
-
-- **Multi-User Selection**: Select one or multiple users for group vacations
-- **Manual User Entry**: Add users by typing their email address
-- **Named Location Integration**: Choose from your configured geofencing locations
-- **Smart Filtering**: Automatically excludes admin and service accounts
-- **Automatic Naming**: Policies follow format: `GEO-username-country-ticket-date-VACATIONMODE`
-- **Main Policy Exclusion**: Automatically excludes users from your main geofencing policy
-- **Modern GUI**: User-friendly Windows interface with status updates
-
 ## Installation
 
 ```powershell
@@ -32,8 +22,9 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 1. **Sign In**: Click "Sign In to Microsoft Graph" and authenticate
 2. **Select Users**: Either click "Refresh Users" and select from the list, or manually add users by typing their email
 3. **Select Destination**: Choose the vacation country from the dropdown
-4. **Select Main Policy** (optional): Choose your main geofencing policy to exclude users from
-5. **Enter Details**: 
+(or create new locations with the upcoming country creation script)
+4. **Select Main Policy**: Choose your main geofencing policy to exclude users from
+5. **Enter Details**:
    - Ticket Number (for tracking)
    - End Date (format: dd-mm-yyyy)
 6. **Create Policy**: Click "Create CA Policy"
@@ -42,7 +33,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ### Technical Flow
 
 1. **Authentication**: Connects to Microsoft Graph using OAuth 2.0
-2. **Data Retrieval**: 
+2. **Data Retrieval**:
    - Fetches all non-admin users from Entra ID
    - Loads Named Locations (geofencing zones)
    - Retrieves existing Conditional Access policies
