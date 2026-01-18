@@ -518,6 +518,66 @@ $SignInBtn.Add_Click({
             $script:GraphConnected = $true
             Add-StatusMessage "SUCCESS: Connected as $($context.Account)"
             
+            # Check for Conditional Access license (Azure AD Premium P1 or higher)
+            Add-StatusMessage "Checking for Conditional Access license..."
+            $licenseCheckFailed = $false
+            try {
+                # Try to read CA policies - if tenant doesn't have P1, this will fail
+                $testPolicy = Get-MgIdentityConditionalAccessPolicy -Top 1 -ErrorAction Stop
+                Add-StatusMessage "SUCCESS: Conditional Access is available in this tenant"
+            } catch {
+                $errorMessage = $_.Exception.Message
+                $innerError = $_.Exception.InnerException.Message
+                
+                Add-StatusMessage "ERROR: Conditional Access not available - $errorMessage"
+                
+                # Check if it's a license/premium issue
+                if ($errorMessage -like "*does not have a premium license*" -or 
+                    $errorMessage -like "*Premium*" -or 
+                    $errorMessage -like "*license*" -or 
+                    $errorMessage -like "*subscription*" -or
+                    $innerError -like "*Premium*" -or
+                    $innerError -like "*license*") {
+                    
+                    $licenseCheckFailed = $true
+                } else {
+                    # Generic error - might still be a license issue, so warn
+                    Add-StatusMessage "WARNING: Could not verify Conditional Access license"
+                    $licenseCheckFailed = $true
+                }
+            }
+            
+            if ($licenseCheckFailed) {
+                $window.Topmost = $true
+                [System.Windows.MessageBox]::Show(
+                    $window,
+                    "Conditional Access License Required`n`n" +
+                    "This tenant appears to be using Entra ID Free and does not have the required licenses to use Conditional Access policies.`n`n" +
+                    "To use Conditional Access, you need one of:`n" +
+                    "  - Azure AD Premium P1`n" +
+                    "  - Azure AD Premium P2`n" +
+                    "  - Microsoft 365 Business Premium`n`n" +
+                    "Please upgrade your tenant's subscription to continue.`n`n" +
+                    "For assistance, contact: b.dezeeuw@bizway.nl",
+                    "License Required",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Warning
+                )
+                $window.Topmost = $true
+                
+                # Disconnect and reset
+                try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { }
+                $script:GraphConnected = $false
+                $SignInBtn.Visibility = "Visible"
+                $DisconnectBtn.Visibility = "Collapsed"
+                $RefreshUsersBtn.IsEnabled = $false
+                $ConnectionStatusText.Text = "Not Connected"
+                $ConnectionStatusText.Foreground = "Gray"
+                $ConnectionStatusBorder.Background = "#F0F0F0"
+                $ConnectionStatusBorder.BorderBrush = "Gray"
+                return
+            }
+            
             # Hide Sign In button and show Disconnect button
             $SignInBtn.Visibility = "Collapsed"
             $DisconnectBtn.Visibility = "Visible"
@@ -533,7 +593,7 @@ $SignInBtn.Add_Click({
             # Fetch Named Locations
             Add-StatusMessage "Loading named locations..."
             try {
-                $namedLocations = Get-MgIdentityConditionalAccessNamedLocation -All
+                $namedLocations = Get-MgIdentityConditionalAccessNamedLocation -All -ErrorAction Stop
                 
                 # Clear the cache and repopulate
                 $script:NamedLocationsCache = @{}
@@ -548,13 +608,40 @@ $SignInBtn.Add_Click({
                 $CountryComboBox.IsEnabled = $true
                 Add-StatusMessage "SUCCESS: Loaded $($namedLocations.Count) named locations"
             } catch {
-                Add-StatusMessage "ERROR: Failed to load named locations - $($_.Exception.Message)"
+                $errorMsg = $_.Exception.Message
+                Add-StatusMessage "ERROR: Failed to load named locations - Named Locations require Azure AD Premium P1 or higher"
+                
+                # This is likely a license issue too
+                $window.Topmost = $true
+                [System.Windows.MessageBox]::Show(
+                    $window,
+                    "Named Locations require Azure AD Premium`n`n" +
+                    "Named Locations are a premium feature that requires Azure AD Premium P1 or higher.`n`n" +
+                    "This tenant appears to be using Entra ID Free.`n`n" +
+                    "For assistance, contact: b.dezeeuw@bizway.nl",
+                    "Premium Feature Required",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Warning
+                )
+                $window.Topmost = $true
+                
+                # Disconnect and reset
+                try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { }
+                $script:GraphConnected = $false
+                $SignInBtn.Visibility = "Visible"
+                $DisconnectBtn.Visibility = "Collapsed"
+                $RefreshUsersBtn.IsEnabled = $false
+                $ConnectionStatusText.Text = "Not Connected"
+                $ConnectionStatusText.Foreground = "Gray"
+                $ConnectionStatusBorder.Background = "#F0F0F0"
+                $ConnectionStatusBorder.BorderBrush = "Gray"
+                return
             }
             
             # Fetch Conditional Access Policies
             Add-StatusMessage "Loading Conditional Access policies..."
             try {
-                $caPolicies = Get-MgIdentityConditionalAccessPolicy -All
+                $caPolicies = Get-MgIdentityConditionalAccessPolicy -All -ErrorAction Stop
                 
                 # Check for geofencing or country blocklist policies
                 $geofencingPolicies = $caPolicies | Where-Object {
@@ -588,7 +675,34 @@ $SignInBtn.Add_Click({
                 $ExistingPolicyComboBox.IsEnabled = $true
                 Add-StatusMessage "SUCCESS: Loaded $($caPolicies.Count) CA policies ($($geofencingPolicies.Count) geofencing policies found)"
             } catch {
-                Add-StatusMessage "ERROR: Failed to load CA policies - $($_.Exception.Message)"
+                $errorMsg = $_.Exception.Message
+                Add-StatusMessage "ERROR: Failed to load CA policies - Conditional Access requires Azure AD Premium P1 or higher"
+                
+                # This confirms it's a license issue
+                $window.Topmost = $true
+                [System.Windows.MessageBox]::Show(
+                    $window,
+                    "Conditional Access requires Azure AD Premium`n`n" +
+                    "Conditional Access Policies require Azure AD Premium P1 or higher.`n`n" +
+                    "This tenant appears to be using Entra ID Free.`n`n" +
+                    "For assistance, contact: b.dezeeuw@bizway.nl",
+                    "Premium Feature Required",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Warning
+                )
+                $window.Topmost = $true
+                
+                # Disconnect and reset
+                try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { }
+                $script:GraphConnected = $false
+                $SignInBtn.Visibility = "Visible"
+                $DisconnectBtn.Visibility = "Collapsed"
+                $RefreshUsersBtn.IsEnabled = $false
+                $ConnectionStatusText.Text = "Not Connected"
+                $ConnectionStatusText.Foreground = "Gray"
+                $ConnectionStatusBorder.Background = "#F0F0F0"
+                $ConnectionStatusBorder.BorderBrush = "Gray"
+                return
             }
         }
     } catch {
