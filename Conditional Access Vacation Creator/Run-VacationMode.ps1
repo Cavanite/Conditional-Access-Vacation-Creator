@@ -61,7 +61,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
 # Import modules
 $modules = @(
-
+    'Initialize-Named-Location'
 )
 
 foreach ($module in $modules) {
@@ -79,7 +79,7 @@ foreach ($module in $modules) {
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Conditional Access Vacation Creator" Height="650" Width="900"
+    Title="Conditional Access Vacation Creator" Height="900" Width="1200"
     WindowStartupLocation="CenterScreen" Topmost="True">
     <Grid>
         <Grid.RowDefinitions>
@@ -90,8 +90,8 @@ foreach ($module in $modules) {
         
         <!-- Header -->
         <TextBlock Grid.Row="0" Text="Conditional Access Vacation Creator" 
-                   FontSize="24" FontWeight="Bold" 
-                   HorizontalAlignment="Center" Margin="10"/>
+                   FontSize="20" FontWeight="Bold" 
+                   HorizontalAlignment="Left" Margin="10"/>
         
         <!-- Main Content Area -->
         <Grid Grid.Row="1" Margin="10">
@@ -262,8 +262,19 @@ foreach ($module in $modules) {
                 </GroupBox>
                 
                 <!-- Output/Status Area -->
-                <GroupBox Grid.Row="3" Header="Status" 
-                          FontSize="14" FontWeight="Bold">
+                <GroupBox Grid.Row="3" FontSize="14" FontWeight="Bold">
+                    <GroupBox.Header>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Status" FontSize="14" FontWeight="Bold"/>
+                            <Button Grid.Column="1" Name="ClearStatusBtn" Content="Clear" 
+                                    Width="60" Height="25" FontSize="11"
+                                    Background="#E0E0E0" Margin="5,0,0,0"/>
+                        </Grid>
+                    </GroupBox.Header>
                     <TextBox Name="StatusTextBox" 
                              IsReadOnly="True" 
                              VerticalScrollBarVisibility="Auto"
@@ -284,9 +295,22 @@ foreach ($module in $modules) {
             </Grid.ColumnDefinitions>
             
             <!-- Contact Information -->
-            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                <TextBlock Text="Written by: Bert de Zeeuw - Bizway BV" FontSize="11" FontWeight="Bold"/>
-                <TextBlock Text="Email: b.dezeeuw@bizway.nl" FontSize="10" Foreground="Gray"/>
+            <StackPanel Grid.Column="0" VerticalAlignment="Center" Orientation="Horizontal">
+                <StackPanel VerticalAlignment="Center" Margin="0,0,5,0">
+                    <TextBlock Text="Written by: Bert de Zeeuw - Bizway BV" FontSize="11" FontWeight="Bold"/>
+                    <Button Name="EmailBtn" Background="Transparent" BorderThickness="0" 
+                            Padding="0" Cursor="Hand" HorizontalAlignment="Left"
+                            ToolTip="Send email to b.dezeeuw@bizway.nl">
+                        <TextBlock Text="Email: b.dezeeuw@bizway.nl" FontSize="10" Foreground="#0078D4" TextDecorations="Underline"/>
+                    </Button>
+                </StackPanel>
+                <Button Name="GitHubBtn" Content="GitHub" ToolTip="Visit GitHub Profile"
+                        Width="75" Height="30" Margin="5,0,10,0"
+                        FontSize="10" Background="#24292e" Foreground="White"
+                        BorderBrush="#444d56" Cursor="Hand"/>
+                <Button Name="ExcludeCountriesBtn" Content="Create Countries" 
+                        Width="140" Height="35" Margin="5"
+                        FontWeight="Bold" Background="#0078D4" Foreground="White"/>
             </StackPanel>
             
             <!-- Action Buttons -->
@@ -326,6 +350,10 @@ $SignInBtn = $window.FindName("SignInBtn")
 $DisconnectBtn = $window.FindName("DisconnectBtn")
 $ConnectionStatusBorder = $window.FindName("ConnectionStatusBorder")
 $ConnectionStatusText = $window.FindName("ConnectionStatusText")
+$ExcludeCountriesBtn = $window.FindName("ExcludeCountriesBtn")
+$ClearStatusBtn = $window.FindName("ClearStatusBtn")
+$GitHubBtn = $window.FindName("GitHubBtn")
+$EmailBtn = $window.FindName("EmailBtn")
 
 # Global variable to track Graph connection status
 $script:GraphConnected = $false
@@ -932,6 +960,162 @@ $CloseBtn.Add_Click({
         }
     }
     $window.Close()
+})
+
+# Exclude Countries button handler
+$ClearStatusBtn.Add_Click({
+    $StatusTextBox.Clear()
+    Add-StatusMessage "Status cleared."
+})
+
+$GitHubBtn.Add_Click({
+    Start-Process "https://github.com/Cavanite"
+})
+
+$EmailBtn.Add_Click({
+    Start-Process "mailto:b.dezeeuw@bizway.nl"
+})
+
+$ExcludeCountriesBtn.Add_Click({
+    # Create the country exclusion window
+    [xml]$excludeXaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Create Countries" Height="500" Width="600"
+    WindowStartupLocation="CenterScreen" Topmost="True">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <TextBlock Grid.Row="0" Text="Select Countries to Exclude" 
+                   FontSize="18" FontWeight="Bold" 
+                   HorizontalAlignment="Center" Margin="10"/>
+        
+        <Grid Grid.Row="1" Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            
+            <TextBlock Grid.Row="0" Text="Available Named Locations:" 
+                       FontSize="12" FontWeight="Bold" Margin="0,0,0,5"/>
+            
+            <ListBox Grid.Row="1" Name="CountriesListBox" 
+                     SelectionMode="Multiple"
+                     Margin="0,0,0,10"/>
+            
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Name="SelectAllCountriesBtn" Content="Select All" 
+                        Width="100" Height="30" Margin="5"/>
+                <Button Name="ClearAllCountriesBtn" Content="Clear All" 
+                        Width="100" Height="30" Margin="5"/>
+            </StackPanel>
+        </Grid>
+        
+        <StackPanel Grid.Row="2" Orientation="Horizontal" 
+                    HorizontalAlignment="Right" Margin="10">
+            <Button Name="SaveExclusionsBtn" Content="Save Exclusions" 
+                    Width="120" Height="35" Margin="5" 
+                    FontWeight="Bold" Background="#107C10" Foreground="White"/>
+            <Button Name="CancelExclusionsBtn" Content="Cancel" 
+                    Width="100" Height="35" Margin="5"/>
+        </StackPanel>
+    </Grid>
+</Window>
+"@
+    
+    try {
+        $excludeReader = New-Object System.Xml.XmlNodeReader $excludeXaml
+        $excludeWindow = [Windows.Markup.XamlReader]::Load($excludeReader)
+        
+        # Get UI elements
+        $CountriesListBox = $excludeWindow.FindName("CountriesListBox")
+        $SelectAllCountriesBtn = $excludeWindow.FindName("SelectAllCountriesBtn")
+        $ClearAllCountriesBtn = $excludeWindow.FindName("ClearAllCountriesBtn")
+        $SaveExclusionsBtn = $excludeWindow.FindName("SaveExclusionsBtn")
+        $CancelExclusionsBtn = $excludeWindow.FindName("CancelExclusionsBtn")
+        
+        # Check if connected to Graph
+        if (-not $script:GraphConnected) {
+            [System.Windows.MessageBox]::Show(
+                "Please sign in to Microsoft Graph first.",
+                "Not Connected",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Warning
+            )
+            return
+        }
+        
+        # Load named locations
+        try {
+            $namedLocations = Get-MgIdentityConditionalAccessNamedLocation -All
+            foreach ($location in $namedLocations) {
+                $CountriesListBox.Items.Add($location.DisplayName) | Out-Null
+            }
+        } catch {
+            [System.Windows.MessageBox]::Show(
+                "Failed to load named locations: $($_.Exception.Message)",
+                "Error",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Error
+            )
+            return
+        }
+        
+        # Button event handlers
+        $SelectAllCountriesBtn.Add_Click({
+            $CountriesListBox.SelectAll()
+        })
+        
+        $ClearAllCountriesBtn.Add_Click({
+            $CountriesListBox.UnselectAll()
+        })
+        
+        $SaveExclusionsBtn.Add_Click({
+            $selectedCountries = $CountriesListBox.SelectedItems
+            if ($selectedCountries.Count -eq 0) {
+                [System.Windows.MessageBox]::Show(
+                    "Please select at least one country to exclude.",
+                    "No Selection",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Warning
+                )
+                return
+            }
+            
+            # Store the selected exclusions in a script variable
+            $script:ExcludedCountries = @($selectedCountries)
+            
+            [System.Windows.MessageBox]::Show(
+                "Selected $($selectedCountries.Count) countries for exclusion.`n`n" + 
+                "These will be excluded from the vacation policy.",
+                "Exclusions Saved",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Information
+            )
+            
+            Add-StatusMessage "Excluded countries: $($selectedCountries -join ', ')"
+            $excludeWindow.Close()
+        })
+        
+        $CancelExclusionsBtn.Add_Click({
+            $excludeWindow.Close()
+        })
+        
+        $excludeWindow.ShowDialog() | Out-Null
+        
+    } catch {
+        [System.Windows.MessageBox]::Show(
+            "Failed to open country exclusion window: $($_.Exception.Message)",
+            "Error",
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        )
+    }
 })
 
 # Show the window
