@@ -35,7 +35,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 1. **Authentication**: Connects to Microsoft Graph using OAuth 2.0
 2. **Data Retrieval**:
    - Fetches all non-admin users from Entra ID
-   - Loads Named Locations (geofencing zones)
+   - Loads Named Locations (geofencing IP country locations)
    - Retrieves existing Conditional Access policies
 3. **User Selection**: Maps display names to user GUIDs
 4. **Location Mapping**: Resolves location names to location GUIDs
