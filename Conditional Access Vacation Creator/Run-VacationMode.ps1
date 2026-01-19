@@ -656,18 +656,15 @@ $SignInBtn.Add_Click({
             try {
                 $caPolicies = Get-MgIdentityConditionalAccessPolicy -All -ErrorAction Stop
                 
-                # Check for geofencing or country blocklist policies
+                # Check for geofencing policies - strict filter: must contain "Geofencing" or "Countrywhitelist"
                 $geofencingPolicies = $caPolicies | Where-Object {
-                    $_.DisplayName -like '*geofenc*' -or 
-                    $_.DisplayName -like '*country*' -or 
-                    $_.DisplayName -like '*blocklist*' -or
-                    $_.DisplayName -like '*block*list*' -or
-                    $_.DisplayName -like '*location*'
+                    $_.DisplayName -like '*Geofenc*' -or 
+                    $_.DisplayName -like '*Countrywhitelist*'
                 }
                 
                 if ($geofencingPolicies.Count -eq 0) {
-                    Add-StatusMessage "ERROR: No geofencing or country blocklist policy found!"
-                    [System.Windows.MessageBox]::Show("No geofencing or country blocklist Conditional Access policy was found in your tenant.`n`nThis tool requires an existing main geofencing policy to function properly.`n`nPlease contact Bert de Zeeuw at b.dezeeuw@bizway.nl to set up the required infrastructure.", "Configuration Required", "OK", "Error")
+                    Add-StatusMessage "ERROR: No geofencing policy found!"
+                    [System.Windows.MessageBox]::Show("No Conditional Access policy with 'Geofencing' or 'Countrywhitelist' in the name was found in your tenant.`n`nThis tool requires an existing geofencing policy to function properly.`n`nPlease create a policy with 'Geofencing' or 'Countrywhitelist' in its display name.`n`nFor more information, contact Bert de Zeeuw at b.dezeeuw@bizway.nl", "Configuration Required", "OK", "Error")
                     
                     # Disable policy creation
                     $ExistingPolicyComboBox.IsEnabled = $false
@@ -675,18 +672,22 @@ $SignInBtn.Add_Click({
                     return
                 }
                 
-                # Clear the cache and repopulate
+                # Clear the cache and repopulate with only geofencing policies
                 $script:CAPoliciesCache = @{}
                 
                 $ExistingPolicyComboBox.Items.Clear()
-                foreach ($policy in $caPolicies) {
+                foreach ($policy in $geofencingPolicies) {
                     # Store policy ID in cache with display name as key
                     $script:CAPoliciesCache[$policy.DisplayName] = $policy.Id
                     $ExistingPolicyComboBox.Items.Add($policy.DisplayName) | Out-Null
                 }
                 
                 $ExistingPolicyComboBox.IsEnabled = $true
-                Add-StatusMessage "SUCCESS: Loaded $($caPolicies.Count) CA policies ($($geofencingPolicies.Count) geofencing policies found)"
+                Add-StatusMessage "SUCCESS: Loaded $($geofencingPolicies.Count) geofencing policies"
+                
+                # Automatically load users after successful connection
+                Add-StatusMessage "Automatically loading users..."
+                $RefreshUsersBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
             } catch {
                 $errorMsg = $_.Exception.Message
                 Add-StatusMessage "ERROR: Failed to load CA policies - Conditional Access requires Azure AD Premium P1 or higher"
@@ -1239,6 +1240,14 @@ $ExcludeCountriesBtn.Add_Click({
             $allCountries = @()
             $script:CountryCodeLookup = @{}
             
+            # Get existing Named Locations from Graph
+            $existingNamedLocations = @()
+            try {
+                $existingNamedLocations = Get-MgIdentityConditionalAccessNamedLocation -All -ErrorAction Stop | Select-Object -ExpandProperty DisplayName
+            } catch {
+                Write-Verbose "Could not fetch existing named locations: $_"
+            }
+            
             # Load from the module content
             $modulePath = Join-Path -Path $ModulesPath -ChildPath "Initialize-Named-Location.psm1"
             if (Test-Path $modulePath) {
@@ -1255,6 +1264,7 @@ $ExcludeCountriesBtn.Add_Click({
                     $allCountries += @{
                         Name = $countryName
                         Code = $countryCode
+                        Exists = $existingNamedLocations -contains $countryName
                     }
                     # Create lookup table for country name -> code
                     $script:CountryCodeLookup[$countryName] = $countryCode
@@ -1264,23 +1274,28 @@ $ExcludeCountriesBtn.Add_Click({
             if ($allCountries.Count -eq 0) {
                 Add-StatusMessage "WARNING: Could not load countries from module, using basic country list"
                 $allCountries = @(
-                    @{Name="United States"; Code="US"},
-                    @{Name="United Kingdom"; Code="GB"},
-                    @{Name="Canada"; Code="CA"},
-                    @{Name="Australia"; Code="AU"},
-                    @{Name="Germany"; Code="DE"},
-                    @{Name="France"; Code="FR"},
-                    @{Name="Spain"; Code="ES"},
-                    @{Name="Netherlands"; Code="NL"}
+                    @{Name="United States"; Code="US"; Exists = $existingNamedLocations -contains "United States"},
+                    @{Name="United Kingdom"; Code="GB"; Exists = $existingNamedLocations -contains "United Kingdom"},
+                    @{Name="Canada"; Code="CA"; Exists = $existingNamedLocations -contains "Canada"},
+                    @{Name="Australia"; Code="AU"; Exists = $existingNamedLocations -contains "Australia"},
+                    @{Name="Germany"; Code="DE"; Exists = $existingNamedLocations -contains "Germany"},
+                    @{Name="France"; Code="FR"; Exists = $existingNamedLocations -contains "France"},
+                    @{Name="Spain"; Code="ES"; Exists = $existingNamedLocations -contains "Spain"},
+                    @{Name="Netherlands"; Code="NL"; Exists = $existingNamedLocations -contains "Netherlands"}
                 )
                 foreach ($country in $allCountries) {
                     $script:CountryCodeLookup[$country.Name] = $country.Code
                 }
             }
             
-            # Populate the combo box
+            # Populate the combo box with indicator for existing countries
             foreach ($country in ($allCountries | Sort-Object { $_.Name })) {
-                $CountrySelectionComboBox.Items.Add($country.Name) | Out-Null
+                if ($country.Exists) {
+                    $displayText = "$($country.Name) (Already Exists)"
+                } else {
+                    $displayText = $country.Name
+                }
+                $CountrySelectionComboBox.Items.Add($displayText) | Out-Null
             }
         } catch {
             Add-StatusMessage "ERROR: Failed to load countries - $($_.Exception.Message)"
@@ -1295,9 +1310,9 @@ $ExcludeCountriesBtn.Add_Click({
         
         # Button event handlers
         $AddCountryBtn.Add_Click({
-            $selectedCountry = $CountrySelectionComboBox.SelectedItem
+            $selectedCountryDisplay = $CountrySelectionComboBox.SelectedItem
             
-            if ([string]::IsNullOrWhiteSpace($selectedCountry)) {
+            if ([string]::IsNullOrWhiteSpace($selectedCountryDisplay)) {
                 [System.Windows.MessageBox]::Show(
                     "Please select a country from the dropdown list.",
                     "No Country Selected",
@@ -1306,6 +1321,9 @@ $ExcludeCountriesBtn.Add_Click({
                 )
                 return
             }
+            
+            # Strip the "(Already Exists)" label to get the actual country name
+            $selectedCountry = $selectedCountryDisplay -replace '\s*\(Already Exists\)$', ''
             
             # Check if country already exists in list
             if ($CountriesToCreateListBox.Items -contains $selectedCountry) {
