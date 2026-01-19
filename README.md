@@ -8,6 +8,9 @@ A PowerShell-based GUI tool for creating Microsoft Entra ID (Azure AD) Condition
 
 The **Conditional Access Vacation Creator** creates geofencing Conditional Access policies that block access from all locations *except* the vacation destination. When users travel internationally, this tool helps maintain security by restricting their access to only their travel location.
 
+![Application Screenshot 2](Conditional%20Access%20Vacation%20Creator/Resources/screenshot2.png)
+
+
 ## Installation
 
 ```powershell
