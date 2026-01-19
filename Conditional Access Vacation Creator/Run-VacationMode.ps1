@@ -79,7 +79,7 @@ foreach ($module in $modules) {
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Conditional Access Vacation Creator" Height="900" Width="1200"
+    Title="Conditional Access Vacation Creator" Height="800" Width="1200"
     WindowStartupLocation="CenterScreen" Topmost="False">
     <Grid>
         <Grid.RowDefinitions>
@@ -108,20 +108,41 @@ foreach ($module in $modules) {
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="200"/>
+                        <RowDefinition Height="260"/>
                     </Grid.RowDefinitions>
                     
                     <TextBlock Grid.Row="0" Text="Select Users:" 
                                Margin="5,5,5,2" FontSize="11" FontWeight="Bold"/>
                     
-                    <ListBox Grid.Row="1" Name="UsersListBox" 
+                    <!-- Search Box -->
+                    <Grid Grid.Row="1" Margin="5,0,5,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Name="UserSearchBox" 
+                                 Height="30" 
+                                 Padding="8"
+                                 VerticalContentAlignment="Center"
+                                 FontSize="11"
+                                 Text="Search users..."/>
+                        <Button Grid.Column="1" Name="ClearSearchBtn" 
+                                Content="X" Width="30" Height="30" 
+                                Margin="5,0,0,0"
+                                FontSize="14"
+                                Background="#E0E0E0"
+                                FontWeight="Bold"/>
+                    </Grid>
+                    
+                    <ListBox Grid.Row="2" Name="UsersListBox" 
                              SelectionMode="Multiple"
                              Margin="5"
                              VerticalAlignment="Stretch"/>
                     
-                    <Grid Grid.Row="2" Margin="5">
+                    <Grid Grid.Row="3" Margin="5">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -157,7 +178,7 @@ foreach ($module in $modules) {
                     </Grid>
                     
                     <!-- Status Messages -->
-                    <GroupBox Grid.Row="4" Header="Status" 
+                    <GroupBox Grid.Row="5" Header="Status" 
                               FontSize="12" FontWeight="Bold" Margin="0,5,0,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -171,7 +192,7 @@ foreach ($module in $modules) {
                                      FontFamily="Consolas" FontSize="10"
                                      Margin="5"
                                      TextWrapping="Wrap"
-                                     Height="180"/>
+                                     Height="220"/>
                             <Button Grid.Column="1" Name="ClearStatusBtn" Content="Clear" 
                                     Width="60" Height="25" FontSize="10"
                                     Background="#E0E0E0" Margin="5,5,5,0"
@@ -272,11 +293,11 @@ foreach ($module in $modules) {
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         
-                        <TextBlock Grid.Row="0" Text="Ticket Number:" Margin="5,5,5,2"/>
+                        <TextBlock Grid.Row="0" Text="Ticket Number: *" Margin="5,5,5,2" Foreground="#D13438"/>
                         <TextBox Grid.Row="1" Name="TicketNumberTextBox" 
                                  Margin="5,0,5,5" Height="25"/>
                         
-                        <TextBlock Grid.Row="2" Text="End Date (dd-mm-yyyy):" Margin="5,5,5,2"/>
+                        <TextBlock Grid.Row="2" Text="End Date (dd-mm-yyyy): *" Margin="5,5,5,2" Foreground="#D13438"/>
                         <TextBox Grid.Row="3" Name="EndDateTextBox" 
                                  Margin="5,0,5,5" Height="25"/>
                         
@@ -334,6 +355,8 @@ $window = [Windows.Markup.XamlReader]::Load($reader)
 
 # Get references to UI elements
 $UsersListBox = $window.FindName("UsersListBox")
+$UserSearchBox = $window.FindName("UserSearchBox")
+$ClearSearchBtn = $window.FindName("ClearSearchBtn")
 $CountryComboBox = $window.FindName("CountryComboBox")
 $UserCurrentLocationComboBox = $window.FindName("UserCurrentLocationComboBox")
 $ExistingPolicyComboBox = $window.FindName("ExistingPolicyComboBox")
@@ -735,6 +758,54 @@ $RefreshUsersBtn.Add_Click({
         [System.Windows.MessageBox]::Show("Failed to fetch users: $($_.Exception.Message)", "Error", "OK", "Error")
     }
 })
+
+# User Search Functionality
+$UserSearchBox.Add_TextChanged({
+    $searchTerm = $UserSearchBox.Text.Trim()
+    
+    if ([string]::IsNullOrWhiteSpace($searchTerm) -or $searchTerm -eq "Search users...") {
+        # Show all users
+        $UsersListBox.Items.Clear()
+        foreach ($user in ($script:UserCache.Keys | Sort-Object)) {
+            $UsersListBox.Items.Add($user) | Out-Null
+        }
+    } else {
+        # Filter users based on search term (case-insensitive)
+        $UsersListBox.Items.Clear()
+        foreach ($user in ($script:UserCache.Keys | Sort-Object)) {
+            if ($user -like "*$searchTerm*") {
+                $UsersListBox.Items.Add($user) | Out-Null
+            }
+        }
+    }
+})
+
+# Clear Search Button
+$ClearSearchBtn.Add_Click({
+    $UserSearchBox.Text = "Search users..."
+    $UsersListBox.Items.Clear()
+    foreach ($user in ($script:UserCache.Keys | Sort-Object)) {
+        $UsersListBox.Items.Add($user) | Out-Null
+    }
+})
+
+# Handle focus for search box placeholder
+$UserSearchBox.Add_GotFocus({
+    if ($UserSearchBox.Text -eq "Search users...") {
+        $UserSearchBox.Text = ""
+        $UserSearchBox.Foreground = "Black"
+        $UserSearchBox.FontStyle = "Normal"
+    }
+})
+
+$UserSearchBox.Add_LostFocus({
+    if ([string]::IsNullOrWhiteSpace($UserSearchBox.Text)) {
+        $UserSearchBox.Text = "Search users..."
+        $UserSearchBox.Foreground = "#999999"
+        $UserSearchBox.FontStyle = "Italic"
+    }
+})
+
 
 $SelectAllUsersBtn.Add_Click({
     $UsersListBox.SelectAll()
