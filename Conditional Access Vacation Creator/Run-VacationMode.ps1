@@ -101,7 +101,7 @@ foreach ($module in $modules) {
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             
-            <!-- Left Panel - User Selection -->
+            <!-- Left Panel - User Selection and Status -->
             <GroupBox Grid.Column="0" Header="Select Users on Vacation" 
                       FontSize="14" FontWeight="Bold">
                 <Grid>
@@ -110,46 +110,18 @@ foreach ($module in $modules) {
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="200"/>
                     </Grid.RowDefinitions>
                     
-                    <!-- Manual Username Input -->
-                    <GroupBox Grid.Row="0" Header="Add Username Manually" Margin="5">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            
-                            <TextBlock Grid.Row="0" 
-                                       Text="Paste or type username (e.g., user@domain.com):" 
-                                       Margin="5,5,5,2" FontSize="11"/>
-                            
-                            <Grid Grid.Row="1">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                
-                                <TextBox Grid.Column="0" Name="UsernameInputBox" 
-                                         Height="25" Margin="5,0,5,5"
-                                         VerticalContentAlignment="Center"/>
-                                
-                                <Button Grid.Column="1" Name="AddUsernameBtn" 
-                                        Content="Add" Width="60" Height="25" 
-                                        Margin="0,0,5,5"/>
-                            </Grid>
-                        </Grid>
-                    </GroupBox>
+                    <TextBlock Grid.Row="0" Text="Select Users:" 
+                               Margin="5,5,5,2" FontSize="11" FontWeight="Bold"/>
                     
-                    <TextBlock Grid.Row="1" Text="Or select from list:" 
-                               Margin="5,5,5,2" FontSize="11"/>
-                    
-                    <ListBox Grid.Row="2" Name="UsersListBox" 
+                    <ListBox Grid.Row="1" Name="UsersListBox" 
                              SelectionMode="Multiple"
                              Margin="5"
                              VerticalAlignment="Stretch"/>
                     
-                    <Grid Grid.Row="3" Margin="5">
+                    <Grid Grid.Row="2" Margin="5">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -183,6 +155,29 @@ foreach ($module in $modules) {
                                 Background="#D13438" Foreground="White"
                                 Visibility="Collapsed"/>
                     </Grid>
+                    
+                    <!-- Status Messages -->
+                    <GroupBox Grid.Row="4" Header="Status" 
+                              FontSize="12" FontWeight="Bold" Margin="0,5,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Grid.ColumnSpan="2" Name="StatusTextBox" 
+                                     IsReadOnly="True" 
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto"
+                                     FontFamily="Consolas" FontSize="10"
+                                     Margin="5"
+                                     TextWrapping="Wrap"
+                                     Height="180"/>
+                            <Button Grid.Column="1" Name="ClearStatusBtn" Content="Clear" 
+                                    Width="60" Height="25" FontSize="10"
+                                    Background="#E0E0E0" Margin="5,5,5,0"
+                                    VerticalAlignment="Top"/>
+                        </Grid>
+                    </GroupBox>
                 </Grid>
             </GroupBox>
             
@@ -226,8 +221,27 @@ foreach ($module in $modules) {
                     </Grid>
                 </GroupBox>
                 
+                <!-- User's Current Location -->
+                <GroupBox Grid.Row="1" Header="User's Current Location (Home Country)" 
+                          FontSize="14" FontWeight="Bold" Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        
+                        <TextBlock Grid.Row="0" Text="Select the user's current location (to avoid blocking them before they leave):" 
+                                   Margin="5" TextWrapping="Wrap" FontSize="11"/>
+                        
+                        <ComboBox Grid.Row="1" Name="UserCurrentLocationComboBox" 
+                                  Margin="5" Height="30"
+                                  IsEditable="True"
+                                  IsTextSearchEnabled="True"/>
+                    </Grid>
+                </GroupBox>
+                
                 <!-- Existing Geofencing Policy -->
-                <GroupBox Grid.Row="1" Header="Main Geofencing Policy" 
+                <GroupBox Grid.Row="2" Header="Main Geofencing Policy" 
                           FontSize="14" FontWeight="Bold" Margin="0,0,0,10">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -246,7 +260,7 @@ foreach ($module in $modules) {
                 </GroupBox>
                 
                 <!-- Policy Details -->
-                <GroupBox Grid.Row="2" Header="Policy Details" 
+                <GroupBox Grid.Row="3" Header="Policy Details" 
                           FontSize="14" FontWeight="Bold" Margin="0,0,0,10">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -271,30 +285,6 @@ foreach ($module in $modules) {
                                  Margin="5,0,5,5" Height="25" IsReadOnly="True"
                                  Background="#F0F0F0"/>
                     </Grid>
-                </GroupBox>
-                
-                <!-- Output/Status Area -->
-                <GroupBox Grid.Row="3" FontSize="14" FontWeight="Bold">
-                    <GroupBox.Header>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Status" FontSize="14" FontWeight="Bold"/>
-                            <Button Grid.Column="1" Name="ClearStatusBtn" Content="Clear" 
-                                    Width="60" Height="25" FontSize="11"
-                                    Background="#E0E0E0" Margin="5,0,0,0"/>
-                        </Grid>
-                    </GroupBox.Header>
-                    <TextBox Name="StatusTextBox" 
-                             IsReadOnly="True" 
-                             VerticalScrollBarVisibility="Auto"
-                             HorizontalScrollBarVisibility="Auto"
-                             FontFamily="Consolas" FontSize="12"
-                             Margin="5"
-                             TextWrapping="Wrap"
-                             MinHeight="150"/>
                 </GroupBox>
             </Grid>
         </Grid>
@@ -344,9 +334,8 @@ $window = [Windows.Markup.XamlReader]::Load($reader)
 
 # Get references to UI elements
 $UsersListBox = $window.FindName("UsersListBox")
-$UsernameInputBox = $window.FindName("UsernameInputBox")
-$AddUsernameBtn = $window.FindName("AddUsernameBtn")
 $CountryComboBox = $window.FindName("CountryComboBox")
+$UserCurrentLocationComboBox = $window.FindName("UserCurrentLocationComboBox")
 $ExistingPolicyComboBox = $window.FindName("ExistingPolicyComboBox")
 $TicketNumberTextBox = $window.FindName("TicketNumberTextBox")
 $EndDateTextBox = $window.FindName("EndDateTextBox")
@@ -450,54 +439,6 @@ $PolicyNameTextBox.Text = "GEO-USERNAME-COUNTRY-TICKETNUMBER-dd-mm-yyyy-VACATION
 $RefreshUsersBtn.IsEnabled = $false
 
 # Button Event Handlers
-$AddUsernameBtn.Add_Click({
-    $username = $UsernameInputBox.Text.Trim()
-    if ([string]::IsNullOrWhiteSpace($username)) {
-        Add-StatusMessage "Please enter a username."
-        return
-    }
-    
-    # Check if username already exists in the list
-    if ($UsersListBox.Items -contains $username) {
-        Add-StatusMessage "User '$username' is already in the list."
-        $UsernameInputBox.Clear()
-        return
-    }
-    
-    # Try to fetch user from Graph to get their GUID
-    if ($script:GraphConnected) {
-        try {
-            $user = Get-MgUser -Filter "userPrincipalName eq '$username'" -Property Id,DisplayName,UserPrincipalName
-            if ($user) {
-                $displayText = "$($user.DisplayName) ($($user.UserPrincipalName))"
-                $script:UserCache[$displayText] = $user.Id
-                $UsersListBox.Items.Add($displayText) | Out-Null
-                Add-StatusMessage "Added user: $displayText"
-            } else {
-                $UsersListBox.Items.Add($username) | Out-Null
-                Add-StatusMessage "WARNING: Added '$username' but user not found in Entra ID."
-            }
-        } catch {
-            $UsersListBox.Items.Add($username) | Out-Null
-            Add-StatusMessage "WARNING: Could not verify user: $($_.Exception.Message)"
-        }
-    } else {
-        $UsersListBox.Items.Add($username) | Out-Null
-        Add-StatusMessage "Added user: $username (not verified - please sign in to Graph)"
-    }
-    
-    # Clear the input box
-    $UsernameInputBox.Clear()
-    $UsernameInputBox.Focus()
-})
-
-# Allow Enter key to add username
-$UsernameInputBox.Add_KeyDown({
-    if ($_.Key -eq 'Return') {
-        $AddUsernameBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
-    }
-})
-
 # Update policy name when selection changes
 $UsersListBox.Add_SelectionChanged({
     Update-PolicyName
@@ -612,13 +553,16 @@ $SignInBtn.Add_Click({
                 $script:NamedLocationsCache = @{}
                 
                 $CountryComboBox.Items.Clear()
+                $UserCurrentLocationComboBox.Items.Clear()
                 foreach ($location in $namedLocations) {
                     # Store location ID in cache with display name as key
                     $script:NamedLocationsCache[$location.DisplayName] = $location.Id
                     $CountryComboBox.Items.Add($location.DisplayName) | Out-Null
+                    $UserCurrentLocationComboBox.Items.Add($location.DisplayName) | Out-Null
                 }
                 
                 $CountryComboBox.IsEnabled = $true
+                $UserCurrentLocationComboBox.IsEnabled = $true
                 Add-StatusMessage "SUCCESS: Loaded $($namedLocations.Count) named locations"
             } catch {
                 $errorMsg = $_.Exception.Message
@@ -877,21 +821,40 @@ $CreatePolicyBtn.Add_Click({
             }
         }
         
+        # Validate user's current location selection
+        $selectedUserCurrentLocation = $UserCurrentLocationComboBox.SelectedItem
+        if ([string]::IsNullOrWhiteSpace($selectedUserCurrentLocation)) {
+            [System.Windows.MessageBox]::Show("Please select the user's current location to prevent blocking them in their home country.", "Validation Error", "OK", "Warning")
+            return
+        }
+        
         # Check Graph connection
         if (-not $script:graphConnected) {
             [System.Windows.MessageBox]::Show("Please sign in to Microsoft Graph first.", "Authentication Required", "OK", "Warning")
             return
         }
         
-        # Get location ID from cache
-        $locationId = $null
+        # Get location IDs from cache
+        $vacationLocationId = $null
         if ($script:namedLocationsCache.ContainsKey($selectedCountry)) {
-            $locationId = $script:namedLocationsCache[$selectedCountry]
+            $vacationLocationId = $script:namedLocationsCache[$selectedCountry]
         }
         
-        if ([string]::IsNullOrWhiteSpace($locationId)) {
+        if ([string]::IsNullOrWhiteSpace($vacationLocationId)) {
             Add-StatusMessage "ERROR: Could not find location ID for: $selectedCountry"
-            [System.Windows.MessageBox]::Show("Could not find location ID for selected country.", "Error", "OK", "Error")
+            [System.Windows.MessageBox]::Show("Could not find location ID for selected vacation country.", "Error", "OK", "Error")
+            return
+        }
+        
+        # Get user's current location ID
+        $userLocationId = $null
+        if ($script:namedLocationsCache.ContainsKey($selectedUserCurrentLocation)) {
+            $userLocationId = $script:namedLocationsCache[$selectedUserCurrentLocation]
+        }
+        
+        if ([string]::IsNullOrWhiteSpace($userLocationId)) {
+            Add-StatusMessage "ERROR: Could not find location ID for: $selectedUserCurrentLocation"
+            [System.Windows.MessageBox]::Show("Could not find location ID for user's current location.", "Error", "OK", "Error")
             return
         }
         
@@ -908,9 +871,12 @@ Users ($($selectedUsers.Count)):
   - $userList
 
 Vacation Location: $selectedCountry
+User's Current Location: $selectedUserCurrentLocation
 
 This policy will:
-- BLOCK access from all locations EXCEPT the vacation destination
+- BLOCK access from all locations EXCEPT:
+  * The vacation destination ($selectedCountry)
+  * The user's current location ($selectedUserCurrentLocation)
 - Be created in DISABLED state for review
 - Require manual enablement after verification
 
@@ -960,7 +926,7 @@ Do you want to proceed?
                 }
                 "locations" = @{
                     "includeLocations" = @("All")
-                    "excludeLocations" = @($locationId)
+                    "excludeLocations" = @($vacationLocationId, $userLocationId)
                 }
             }
             "grantControls" = @{
