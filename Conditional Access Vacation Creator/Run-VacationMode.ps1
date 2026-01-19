@@ -80,7 +80,7 @@ foreach ($module in $modules) {
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Conditional Access Vacation Creator" Height="900" Width="1200"
-    WindowStartupLocation="CenterScreen" Topmost="True">
+    WindowStartupLocation="CenterScreen" Topmost="False">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -207,10 +207,22 @@ foreach ($module in $modules) {
                         <TextBlock Grid.Row="0" Text="Select the country the user(s) will be traveling to:" 
                                    Margin="5" TextWrapping="Wrap"/>
                         
-                        <ComboBox Grid.Row="1" Name="CountryComboBox" 
-                                  Margin="5" Height="30"
-                                  IsEditable="True"
-                                  IsTextSearchEnabled="True"/>
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <ComboBox Grid.Column="0" Name="CountryComboBox" 
+                                      Margin="5" Height="30"
+                                      IsEditable="True"
+                                      IsTextSearchEnabled="True"/>
+                            
+                            <Button Grid.Column="1" Name="RefreshCountriesBtn" 
+                                    Content="RF" Width="35" Height="30" Margin="0,5,5,5"
+                                    ToolTip="Refresh country list"
+                                    FontSize="16" Padding="0"/>
+                        </Grid>
                     </Grid>
                 </GroupBox>
                 
@@ -351,6 +363,7 @@ $DisconnectBtn = $window.FindName("DisconnectBtn")
 $ConnectionStatusBorder = $window.FindName("ConnectionStatusBorder")
 $ConnectionStatusText = $window.FindName("ConnectionStatusText")
 $ExcludeCountriesBtn = $window.FindName("ExcludeCountriesBtn")
+$RefreshCountriesBtn = $window.FindName("RefreshCountriesBtn")
 $ClearStatusBtn = $window.FindName("ClearStatusBtn")
 $GitHubBtn = $window.FindName("GitHubBtn")
 $EmailBtn = $window.FindName("EmailBtn")
@@ -788,6 +801,33 @@ $ClearUsersBtn.Add_Click({
     Add-StatusMessage "Selection cleared."
 })
 
+$RefreshCountriesBtn.Add_Click({
+    if (-not $script:GraphConnected) {
+        Add-StatusMessage "ERROR: Please sign in to Microsoft Graph first."
+        [System.Windows.MessageBox]::Show("Please sign in to Microsoft Graph first.", "Not Connected", "OK", "Warning")
+        return
+    }
+    
+    try {
+        Add-StatusMessage "Refreshing country list..."
+        $namedLocations = Get-MgIdentityConditionalAccessNamedLocation -All -ErrorAction Stop
+        
+        # Clear the cache and repopulate
+        $script:NamedLocationsCache = @{}
+        $CountryComboBox.Items.Clear()
+        
+        foreach ($location in $namedLocations) {
+            $script:NamedLocationsCache[$location.DisplayName] = $location.Id
+            $CountryComboBox.Items.Add($location.DisplayName) | Out-Null
+        }
+        
+        Add-StatusMessage "SUCCESS: Refreshed country list ($($namedLocations.Count) countries available)"
+    } catch {
+        Add-StatusMessage "ERROR: Failed to refresh country list - $($_.Exception.Message)"
+        [System.Windows.MessageBox]::Show("Failed to refresh country list: $($_.Exception.Message)", "Error", "OK", "Error")
+    }
+})
+
 $CreatePolicyBtn.Add_Click({
     try {
         # Validate required fields
@@ -1091,51 +1131,80 @@ $EmailBtn.Add_Click({
 })
 
 $ExcludeCountriesBtn.Add_Click({
-    # Create the country exclusion window
-    [xml]$excludeXaml = @"
+    # Create the country creation window
+    [xml]$createCountriesXaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Create Countries" Height="500" Width="600"
+    Title="Create Countries" Height="600" Width="700"
     WindowStartupLocation="CenterScreen" Topmost="True">
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         
-        <TextBlock Grid.Row="0" Text="Select Countries to Exclude" 
+        <TextBlock Grid.Row="0" Text="Create New Countries" 
                    FontSize="18" FontWeight="Bold" 
-                   HorizontalAlignment="Center" Margin="10"/>
+                   HorizontalAlignment="Left" Margin="10"/>
         
-        <Grid Grid.Row="1" Margin="10">
+        <!-- Input Section -->
+        <GroupBox Grid.Row="1" Header="Select Country to Add" 
+                  FontSize="12" FontWeight="Bold" Margin="10,5,10,10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                           Text="Select from the list of available countries:" 
+                           Margin="5,5,5,5" FontSize="11"/>
+                
+                <ComboBox Grid.Row="1" Grid.Column="0" Name="CountrySelectionComboBox" 
+                          Height="30" Margin="5,0,5,5"
+                          VerticalContentAlignment="Center"
+                          IsEditable="True"
+                          IsTextSearchEnabled="True"
+                          Padding="5"/>
+                
+                <Button Grid.Row="1" Grid.Column="1" Name="AddCountryBtn" 
+                        Content="Add Country" Width="100" Height="30" Margin="0,0,5,5"
+                        FontWeight="Bold" Background="#0078D4" Foreground="White"/>
+            </Grid>
+        </GroupBox>
+        
+        <!-- List Section -->
+        <Grid Grid.Row="2" Margin="10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             
-            <TextBlock Grid.Row="0" Text="Available Named Locations:" 
+            <TextBlock Grid.Row="0" Text="Countries to Create:" 
                        FontSize="12" FontWeight="Bold" Margin="0,0,0,5"/>
             
-            <ListBox Grid.Row="1" Name="CountriesListBox" 
-                     SelectionMode="Multiple"
-                     Margin="0,0,0,10"/>
-            
-            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Name="SelectAllCountriesBtn" Content="Select All" 
-                        Width="100" Height="30" Margin="5"/>
-                <Button Name="ClearAllCountriesBtn" Content="Clear All" 
-                        Width="100" Height="30" Margin="5"/>
-            </StackPanel>
+            <ListBox Grid.Row="1" Name="CountriesToCreateListBox" 
+                     SelectionMode="Single"
+                     Margin="0"
+                     VerticalAlignment="Stretch"/>
         </Grid>
         
-        <StackPanel Grid.Row="2" Orientation="Horizontal" 
+        <!-- Buttons -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" 
                     HorizontalAlignment="Right" Margin="10">
-            <Button Name="SaveExclusionsBtn" Content="Save Exclusions" 
+            <Button Name="RemoveCountryBtn" Content="Remove Selected" 
+                    Width="120" Height="35" Margin="5" 
+                    Background="#D13438" Foreground="White"/>
+            <Button Name="CreateCountriesBtn" Content="Create Countries" 
                     Width="120" Height="35" Margin="5" 
                     FontWeight="Bold" Background="#107C10" Foreground="White"/>
-            <Button Name="CancelExclusionsBtn" Content="Cancel" 
+            <Button Name="CancelCreateCountriesBtn" Content="Cancel" 
                     Width="100" Height="35" Margin="5"/>
         </StackPanel>
     </Grid>
@@ -1143,15 +1212,16 @@ $ExcludeCountriesBtn.Add_Click({
 "@
     
     try {
-        $excludeReader = New-Object System.Xml.XmlNodeReader $excludeXaml
-        $excludeWindow = [Windows.Markup.XamlReader]::Load($excludeReader)
+        $createCountriesReader = New-Object System.Xml.XmlNodeReader $createCountriesXaml
+        $createCountriesWindow = [Windows.Markup.XamlReader]::Load($createCountriesReader)
         
         # Get UI elements
-        $CountriesListBox = $excludeWindow.FindName("CountriesListBox")
-        $SelectAllCountriesBtn = $excludeWindow.FindName("SelectAllCountriesBtn")
-        $ClearAllCountriesBtn = $excludeWindow.FindName("ClearAllCountriesBtn")
-        $SaveExclusionsBtn = $excludeWindow.FindName("SaveExclusionsBtn")
-        $CancelExclusionsBtn = $excludeWindow.FindName("CancelExclusionsBtn")
+        $CountrySelectionComboBox = $createCountriesWindow.FindName("CountrySelectionComboBox")
+        $AddCountryBtn = $createCountriesWindow.FindName("AddCountryBtn")
+        $CountriesToCreateListBox = $createCountriesWindow.FindName("CountriesToCreateListBox")
+        $RemoveCountryBtn = $createCountriesWindow.FindName("RemoveCountryBtn")
+        $CreateCountriesBtn = $createCountriesWindow.FindName("CreateCountriesBtn")
+        $CancelCreateCountriesBtn = $createCountriesWindow.FindName("CancelCreateCountriesBtn")
         
         # Check if connected to Graph
         if (-not $script:GraphConnected) {
@@ -1164,16 +1234,59 @@ $ExcludeCountriesBtn.Add_Click({
             return
         }
         
-        # Load named locations
+        # Load countries from Initialize-Named-Location module
         try {
-            $namedLocations = Get-MgIdentityConditionalAccessNamedLocation -All
-            foreach ($location in $namedLocations) {
-                $CountriesListBox.Items.Add($location.DisplayName) | Out-Null
+            $allCountries = @()
+            $script:CountryCodeLookup = @{}
+            
+            # Load from the module content
+            $modulePath = Join-Path -Path $ModulesPath -ChildPath "Initialize-Named-Location.psm1"
+            if (Test-Path $modulePath) {
+                # Read the module and extract country list
+                $moduleContent = Get-Content -Path $modulePath -Raw
+                
+                # Extract the country definitions (simplified parsing)
+                # The countries are defined as @() array with PSCustomObject items
+                $countryMatches = [regex]::Matches($moduleContent, '\[PSCustomObject\]@\{Name = "([^"]+)"; Code = "([^"]+)"\}')
+                
+                foreach ($match in $countryMatches) {
+                    $countryName = $match.Groups[1].Value
+                    $countryCode = $match.Groups[2].Value
+                    $allCountries += @{
+                        Name = $countryName
+                        Code = $countryCode
+                    }
+                    # Create lookup table for country name -> code
+                    $script:CountryCodeLookup[$countryName] = $countryCode
+                }
+            }
+            
+            if ($allCountries.Count -eq 0) {
+                Add-StatusMessage "WARNING: Could not load countries from module, using basic country list"
+                $allCountries = @(
+                    @{Name="United States"; Code="US"},
+                    @{Name="United Kingdom"; Code="GB"},
+                    @{Name="Canada"; Code="CA"},
+                    @{Name="Australia"; Code="AU"},
+                    @{Name="Germany"; Code="DE"},
+                    @{Name="France"; Code="FR"},
+                    @{Name="Spain"; Code="ES"},
+                    @{Name="Netherlands"; Code="NL"}
+                )
+                foreach ($country in $allCountries) {
+                    $script:CountryCodeLookup[$country.Name] = $country.Code
+                }
+            }
+            
+            # Populate the combo box
+            foreach ($country in ($allCountries | Sort-Object { $_.Name })) {
+                $CountrySelectionComboBox.Items.Add($country.Name) | Out-Null
             }
         } catch {
+            Add-StatusMessage "ERROR: Failed to load countries - $($_.Exception.Message)"
             [System.Windows.MessageBox]::Show(
-                "Failed to load named locations: $($_.Exception.Message)",
-                "Error",
+                "Failed to load countries from module: $($_.Exception.Message)",
+                "Error Loading Countries",
                 [System.Windows.MessageBoxButton]::OK,
                 [System.Windows.MessageBoxImage]::Error
             )
@@ -1181,50 +1294,137 @@ $ExcludeCountriesBtn.Add_Click({
         }
         
         # Button event handlers
-        $SelectAllCountriesBtn.Add_Click({
-            $CountriesListBox.SelectAll()
-        })
-        
-        $ClearAllCountriesBtn.Add_Click({
-            $CountriesListBox.UnselectAll()
-        })
-        
-        $SaveExclusionsBtn.Add_Click({
-            $selectedCountries = $CountriesListBox.SelectedItems
-            if ($selectedCountries.Count -eq 0) {
+        $AddCountryBtn.Add_Click({
+            $selectedCountry = $CountrySelectionComboBox.SelectedItem
+            
+            if ([string]::IsNullOrWhiteSpace($selectedCountry)) {
                 [System.Windows.MessageBox]::Show(
-                    "Please select at least one country to exclude.",
-                    "No Selection",
+                    "Please select a country from the dropdown list.",
+                    "No Country Selected",
                     [System.Windows.MessageBoxButton]::OK,
                     [System.Windows.MessageBoxImage]::Warning
                 )
                 return
             }
             
-            # Store the selected exclusions in a script variable
-            $script:ExcludedCountries = @($selectedCountries)
+            # Check if country already exists in list
+            if ($CountriesToCreateListBox.Items -contains $selectedCountry) {
+                [System.Windows.MessageBox]::Show(
+                    "Country '$selectedCountry' is already in the list.",
+                    "Duplicate Country",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Warning
+                )
+                return
+            }
+            
+            $CountriesToCreateListBox.Items.Add($selectedCountry) | Out-Null
+            $CountrySelectionComboBox.SelectedIndex = -1
+            $CountrySelectionComboBox.Focus()
+        })
+        
+        # Allow Enter key to add country
+        $CountrySelectionComboBox.Add_KeyDown({
+            if ($_.Key -eq 'Return') {
+                $AddCountryBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+            }
+        })
+        
+        $RemoveCountryBtn.Add_Click({
+            if ($CountriesToCreateListBox.SelectedItem -ne $null) {
+                $CountriesToCreateListBox.Items.Remove($CountriesToCreateListBox.SelectedItem)
+            } else {
+                [System.Windows.MessageBox]::Show(
+                    "Please select a country to remove.",
+                    "No Selection",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Warning
+                )
+            }
+        })
+        
+        $CreateCountriesBtn.Add_Click({
+            $countriesToCreate = @($CountriesToCreateListBox.Items)
+            
+            if ($countriesToCreate.Count -eq 0) {
+                [System.Windows.MessageBox]::Show(
+                    "Please add at least one country to create.",
+                    "No Countries",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Warning
+                )
+                return
+            }
+            
+            # Create named locations for each country
+            $successCount = 0
+            $failureCount = 0
+            
+            foreach ($country in $countriesToCreate) {
+                try {
+                    Add-StatusMessage "Creating named location: $country..."
+                    
+                    # Get the ISO 3166-1 alpha-2 country code from lookup table
+                    $countryCode = $script:CountryCodeLookup[$country]
+                    
+                    if ([string]::IsNullOrWhiteSpace($countryCode)) {
+                        Add-StatusMessage "ERROR: Could not find country code for '$country'"
+                        $failureCount++
+                        continue
+                    }
+                    
+                    # Create a country-based named location using the correct odata type
+                    $params = @{
+                        DisplayName = $country
+                        "@odata.type" = "#microsoft.graph.countryNamedLocation"
+                        countriesAndRegions = @($countryCode)
+                        includeUnknownCountriesAndRegions = $false
+                    }
+                    
+                    $result = New-MgIdentityConditionalAccessNamedLocation -BodyParameter $params -ErrorAction Stop
+                    
+                    if ($result) {
+                        Add-StatusMessage "SUCCESS: Created named location '$country' (Code: $countryCode, ID: $($result.Id))"
+                        $successCount++
+                    }
+                } catch {
+                    Add-StatusMessage "ERROR: Failed to create '$country' - $($_.Exception.Message)"
+                    $failureCount++
+                }
+            }
+            
+            # Refresh the main country combo box
+            try {
+                $namedLocations = Get-MgIdentityConditionalAccessNamedLocation -All -ErrorAction Stop
+                $script:NamedLocationsCache = @{}
+                $CountryComboBox.Items.Clear()
+                foreach ($location in $namedLocations) {
+                    $script:NamedLocationsCache[$location.DisplayName] = $location.Id
+                    $CountryComboBox.Items.Add($location.DisplayName) | Out-Null
+                }
+            } catch {
+                Add-StatusMessage "WARNING: Could not refresh country list - $($_.Exception.Message)"
+            }
             
             [System.Windows.MessageBox]::Show(
-                "Selected $($selectedCountries.Count) countries for exclusion.`n`n" + 
-                "These will be excluded from the vacation policy.",
-                "Exclusions Saved",
+                "Created $successCount countries successfully." + $(if ($failureCount -gt 0) { "`nFailed to create $failureCount countries." } else { "" }),
+                "Countries Created",
                 [System.Windows.MessageBoxButton]::OK,
                 [System.Windows.MessageBoxImage]::Information
             )
             
-            Add-StatusMessage "Excluded countries: $($selectedCountries -join ', ')"
-            $excludeWindow.Close()
+            $createCountriesWindow.Close()
         })
         
-        $CancelExclusionsBtn.Add_Click({
-            $excludeWindow.Close()
+        $CancelCreateCountriesBtn.Add_Click({
+            $createCountriesWindow.Close()
         })
         
-        $excludeWindow.ShowDialog() | Out-Null
+        $createCountriesWindow.ShowDialog() | Out-Null
         
     } catch {
         [System.Windows.MessageBox]::Show(
-            "Failed to open country exclusion window: $($_.Exception.Message)",
+            "Failed to open country creation window: $($_.Exception.Message)",
             "Error",
             [System.Windows.MessageBoxButton]::OK,
             [System.Windows.MessageBoxImage]::Error
