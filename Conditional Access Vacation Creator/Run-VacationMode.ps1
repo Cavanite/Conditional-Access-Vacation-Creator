@@ -1411,6 +1411,32 @@ $ExcludeCountriesBtn.Add_Click({
                 return
             }
             
+            # Check for duplicate countries before creating
+            $existingCountries = @()
+            try {
+                $namedLocations = Get-MgIdentityConditionalAccessNamedLocation -All -ErrorAction Stop
+                $existingCountries = $namedLocations.DisplayName
+            } catch {
+                Add-StatusMessage "WARNING: Could not verify existing named locations - $($_.Exception.Message)"
+            }
+            
+            # Check if any countries to create already exist
+            $duplicateCountries = $countriesToCreate | Where-Object { $_ -in $existingCountries }
+            
+            if ($duplicateCountries.Count -gt 0) {
+                $duplicateList = $duplicateCountries -join ", "
+                $result = [System.Windows.MessageBox]::Show(
+                    "Duplicate Country name found:`n`n$duplicateList`n`nDo you want to continue?",
+                    "Duplicate Country",
+                    [System.Windows.MessageBoxButton]::YesNo,
+                    [System.Windows.MessageBoxImage]::Warning
+                )
+                
+                if ($result -ne "Yes") {
+                    return
+                }
+            }
+            
             # Create named locations for each country
             $successCount = 0
             $failureCount = 0
