@@ -701,7 +701,7 @@ $RefreshUsersBtn.Add_Click({
     
     try {
         Add-StatusMessage "Fetching users from Entra ID..."
-        $users = Get-MgUser -All -Property Id,DisplayName,UserPrincipalName | Select-Object Id,DisplayName,UserPrincipalName
+        $users = Get-MgUser -All -Property Id,DisplayName,UserPrincipalName,AssignedLicenses | Select-Object Id,DisplayName,UserPrincipalName,AssignedLicenses
         
         # Filter patterns for admin and breakglass accounts
         $excludePatterns = @(
@@ -718,6 +718,15 @@ $RefreshUsersBtn.Add_Click({
             '*system*'
         )
         
+        # Admin role patterns to exclude
+        $adminRolePatterns = @(
+            '*admin*',
+            '*administrator*',
+            '*privileged*',
+            '*global*',
+            '*security*'
+        )
+        
         # Clear and populate the cache as a hashtable
         $script:UserCache = @{}
         $UsersListBox.Items.Clear()
@@ -726,6 +735,9 @@ $RefreshUsersBtn.Add_Click({
         foreach ($user in $users) {
             # Check if user is external (contains #EXT# in UPN)
             $isExternal = $user.UserPrincipalName -like '*#EXT#*'
+            
+            # Check if user has a valid license assigned
+            $hasLicense = $null -ne $user.AssignedLicenses -and $user.AssignedLicenses.Count -gt 0
             
             # Check if user matches any exclusion pattern
             $shouldExclude = $false
@@ -736,15 +748,31 @@ $RefreshUsersBtn.Add_Click({
                 }
             }
             
-            # Exclude if external or matches exclusion pattern
-            if ($isExternal -or $shouldExclude) {
-                $filteredCount++
+            # Check if user has admin roles
+            $hasAdminRole = $false
+            if (-not $shouldExclude) {
+                try {
+                    $userRoles = Get-MgUserMemberOf -UserId $user.Id -All -ErrorAction SilentlyContinue
+                    foreach ($role in $userRoles) {
+                        $roleName = $role.AdditionalProperties.displayName
+                        foreach ($pattern in $adminRolePatterns) {
+                            if ($roleName -like $pattern) {
+                                $hasAdminRole = $true
+                                break
+                            }
+                        }
+                        if ($hasAdminRole) { break }
+                    }
+                } catch {
+                    # Silent fail if role retrieval fails
+                }
             }
-            # Exclude if external or matches exclusion pattern
-            if ($isExternal -or $shouldExclude) {
+            
+            # Exclude if external, no license, matches exclusion pattern, or has admin role
+            if ($isExternal -or -not $hasLicense -or $shouldExclude -or $hasAdminRole) {
                 $filteredCount++
             } else {
-                # Only add internal, non-admin/non-breakglass users
+                # Only add internal, licensed, non-admin/non-breakglass users
                 $displayText = "$($user.DisplayName) ($($user.UserPrincipalName))"
                 # Store GUID with display text as key
                 $script:UserCache[$displayText] = $user.Id
