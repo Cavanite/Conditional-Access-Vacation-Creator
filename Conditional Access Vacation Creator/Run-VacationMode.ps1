@@ -338,6 +338,10 @@ foreach ($module in $modules) {
             
             <!-- Action Buttons -->
             <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Name="FixGraphModulesBtn" Content="Fix Graph Modules" 
+                        Width="150" Height="35" Margin="5"
+                        FontWeight="Bold" Background="#FF6B00" Foreground="White"
+                        ToolTip="Uninstall and reinstall Microsoft Graph modules"/>
                 <Button Name="CreatePolicyBtn" Content="Create CA Policy" 
                         Width="140" Height="35" Margin="5"
                         FontWeight="Bold"/>
@@ -379,6 +383,7 @@ $RefreshCountriesBtn = $window.FindName("RefreshCountriesBtn")
 $ClearStatusBtn = $window.FindName("ClearStatusBtn")
 $GitHubBtn = $window.FindName("GitHubBtn")
 $EmailBtn = $window.FindName("EmailBtn")
+$FixGraphModulesBtn = $window.FindName("FixGraphModulesBtn")
 
 # Global variable to track Graph connection status
 $script:GraphConnected = $false
@@ -392,18 +397,62 @@ $ExistingPolicyComboBox.IsEnabled = $false
 
 # Function to check and install Microsoft.Graph module
 function Ensure-GraphModule {
-    $requiredModules = @('Microsoft.Graph.Authentication', 'Microsoft.Graph.Users', 'Microsoft.Graph.Identity.SignIns')
+    Add-StatusMessage "Checking Microsoft Graph modules..."
     
-    foreach ($moduleName in $requiredModules) {
-        if (-not (Get-Module -ListAvailable -Name $moduleName)) {
-            Add-StatusMessage "Installing $moduleName..."
-            try {
-                Install-Module -Name $moduleName -Scope CurrentUser -Force -AllowClobber
-                Add-StatusMessage "Successfully installed $moduleName"
-            } catch {
-                Add-StatusMessage "ERROR: Failed to install $moduleName - $($_.Exception.Message)"
-                throw
+    # Check if we can load the modules
+    $loadError = $false
+    try {
+        Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
+        Import-Module Microsoft.Graph.Users -ErrorAction Stop
+        Import-Module Microsoft.Graph.Identity.SignIns -ErrorAction Stop
+        Add-StatusMessage "Graph modules loaded successfully"
+        return
+    } catch {
+        $loadError = $true
+        Add-StatusMessage "ERROR: Cannot load Graph modules - $($_.Exception.Message)"
+    }
+    
+    if ($loadError) {
+        Add-StatusMessage "Attempting to fix module installation..."
+        Add-StatusMessage "This may take a few minutes..."
+        
+        try {
+            # Uninstall all Graph modules to clean up
+            Add-StatusMessage "Removing old Graph modules..."
+            $graphModules = Get-Module -ListAvailable -Name Microsoft.Graph.* | Select-Object -ExpandProperty Name -Unique
+            foreach ($mod in $graphModules) {
+                try {
+                    Uninstall-Module -Name $mod -AllVersions -Force -ErrorAction SilentlyContinue
+                } catch { }
             }
+            
+            # Install fresh versions
+            Add-StatusMessage "Installing fresh Graph modules..."
+            $requiredModules = @('Microsoft.Graph.Authentication', 'Microsoft.Graph.Users', 'Microsoft.Graph.Identity.SignIns')
+            
+            foreach ($moduleName in $requiredModules) {
+                Add-StatusMessage "  Installing $moduleName..."
+                Install-Module -Name $moduleName -Scope CurrentUser -Force -AllowClobber -Repository PSGallery -SkipPublisherCheck
+            }
+            
+            # Import the newly installed modules
+            Add-StatusMessage "Loading newly installed modules..."
+            Import-Module Microsoft.Graph.Authentication -Force
+            Import-Module Microsoft.Graph.Users -Force
+            Import-Module Microsoft.Graph.Identity.SignIns -Force
+            
+            Add-StatusMessage "SUCCESS: Graph modules installed and loaded"
+        } catch {
+            Add-StatusMessage "ERROR: Failed to fix modules - $($_.Exception.Message)"
+            Add-StatusMessage ""
+            Add-StatusMessage "MANUAL FIX REQUIRED:"
+            Add-StatusMessage "1. Close this application"
+            Add-StatusMessage "2. Open PowerShell as Administrator"
+            Add-StatusMessage "3. Run these commands:"
+            Add-StatusMessage "   Get-Module -ListAvailable Microsoft.Graph.* | Uninstall-Module -Force"
+            Add-StatusMessage "   Install-Module Microsoft.Graph -Scope CurrentUser -Force"
+            Add-StatusMessage "4. Restart this application"
+            throw
         }
     }
 }
@@ -488,72 +537,12 @@ $SignInBtn.Add_Click({
         Ensure-GraphModule
         
         Add-StatusMessage "Connecting to Microsoft Graph..."
-        Connect-MgGraph -Scopes "User.Read.All", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess" -NoWelcome
+        Connect-MgGraph -Scopes "User.Read.All", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess" -ContextScope Process -NoWelcome
         
         $context = Get-MgContext
         if ($context) {
             $script:GraphConnected = $true
             Add-StatusMessage "SUCCESS: Connected as $($context.Account)"
-            
-            # Check for Conditional Access license (Azure AD Premium P1 or higher)
-            Add-StatusMessage "Checking for Conditional Access license..."
-            $licenseCheckFailed = $false
-            try {
-                # Try to read CA policies - if tenant doesn't have P1, this will fail
-                $testPolicy = Get-MgIdentityConditionalAccessPolicy -Top 1 -ErrorAction Stop
-                Add-StatusMessage "SUCCESS: Conditional Access is available in this tenant"
-            } catch {
-                $errorMessage = $_.Exception.Message
-                $innerError = $_.Exception.InnerException.Message
-                
-                Add-StatusMessage "ERROR: Conditional Access not available - $errorMessage"
-                
-                # Check if it's a license/premium issue
-                if ($errorMessage -like "*does not have a premium license*" -or 
-                    $errorMessage -like "*Premium*" -or 
-                    $errorMessage -like "*license*" -or 
-                    $errorMessage -like "*subscription*" -or
-                    $innerError -like "*Premium*" -or
-                    $innerError -like "*license*") {
-                    
-                    $licenseCheckFailed = $true
-                } else {
-                    # Generic error - might still be a license issue, so warn
-                    Add-StatusMessage "WARNING: Could not verify Conditional Access license"
-                    $licenseCheckFailed = $true
-                }
-            }
-            
-            if ($licenseCheckFailed) {
-                $window.Topmost = $true
-                [System.Windows.MessageBox]::Show(
-                    $window,
-                    "Conditional Access License Required`n`n" +
-                    "This tenant appears to be using Entra ID Free and does not have the required licenses to use Conditional Access policies.`n`n" +
-                    "To use Conditional Access, you need one of:`n" +
-                    "  - Azure AD Premium P1`n" +
-                    "  - Azure AD Premium P2`n" +
-                    "  - Microsoft 365 Business Premium`n`n" +
-                    "Please upgrade your tenant's subscription to continue.`n`n" +
-                    "For assistance, contact: b.dezeeuw@bizway.nl",
-                    "License Required",
-                    [System.Windows.MessageBoxButton]::OK,
-                    [System.Windows.MessageBoxImage]::Warning
-                )
-                $window.Topmost = $true
-                
-                # Disconnect and reset
-                try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { }
-                $script:GraphConnected = $false
-                $SignInBtn.Visibility = "Visible"
-                $DisconnectBtn.Visibility = "Collapsed"
-                $RefreshUsersBtn.IsEnabled = $false
-                $ConnectionStatusText.Text = "Not Connected"
-                $ConnectionStatusText.Foreground = "Gray"
-                $ConnectionStatusBorder.Background = "#F0F0F0"
-                $ConnectionStatusBorder.BorderBrush = "Gray"
-                return
-            }
             
             # Hide Sign In button and show Disconnect button
             $SignInBtn.Visibility = "Collapsed"
@@ -589,33 +578,7 @@ $SignInBtn.Add_Click({
                 Add-StatusMessage "SUCCESS: Loaded $($namedLocations.Count) named locations"
             } catch {
                 $errorMsg = $_.Exception.Message
-                Add-StatusMessage "ERROR: Failed to load named locations - Named Locations require Azure AD Premium P1 or higher"
-                
-                # This is likely a license issue too
-                $window.Topmost = $true
-                [System.Windows.MessageBox]::Show(
-                    $window,
-                    "Named Locations require Azure AD Premium`n`n" +
-                    "Named Locations are a premium feature that requires Azure AD Premium P1 or higher.`n`n" +
-                    "This tenant appears to be using Entra ID Free.`n`n" +
-                    "For assistance, contact: b.dezeeuw@bizway.nl",
-                    "Premium Feature Required",
-                    [System.Windows.MessageBoxButton]::OK,
-                    [System.Windows.MessageBoxImage]::Warning
-                )
-                $window.Topmost = $true
-                
-                # Disconnect and reset
-                try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { }
-                $script:GraphConnected = $false
-                $SignInBtn.Visibility = "Visible"
-                $DisconnectBtn.Visibility = "Collapsed"
-                $RefreshUsersBtn.IsEnabled = $false
-                $ConnectionStatusText.Text = "Not Connected"
-                $ConnectionStatusText.Foreground = "Gray"
-                $ConnectionStatusBorder.Background = "#F0F0F0"
-                $ConnectionStatusBorder.BorderBrush = "Gray"
-                return
+                Add-StatusMessage "WARNING: Failed to load named locations - $errorMsg"
             }
             
             # Fetch Conditional Access Policies
@@ -630,60 +593,39 @@ $SignInBtn.Add_Click({
                 }
                 
                 if ($geofencingPolicies.Count -eq 0) {
-                    Add-StatusMessage "ERROR: No geofencing policy found!"
-                    [System.Windows.MessageBox]::Show("No Conditional Access policy with 'Geofencing' or 'Countrywhitelist' in the name was found in your tenant.`n`nThis tool requires an existing geofencing policy to function properly.`n`nPlease create a policy with 'Geofencing' or 'Countrywhitelist' in its display name.`n`nFor more information, contact Bert de Zeeuw at b.dezeeuw@bizway.nl", "Configuration Required", "OK", "Error")
+                    Add-StatusMessage "WARNING: No geofencing policy found!"
+                } else {
+                    # Clear the cache and repopulate with only geofencing policies
+                    $script:CAPoliciesCache = @{}
                     
-                    # Disable policy creation
-                    $ExistingPolicyComboBox.IsEnabled = $false
-                    $CreatePolicyBtn.IsEnabled = $false
-                    return
+                    $ExistingPolicyComboBox.Items.Clear()
+                    foreach ($policy in $geofencingPolicies) {
+                        # Store policy ID in cache with display name as key
+                        $script:CAPoliciesCache[$policy.DisplayName] = $policy.Id
+                        $ExistingPolicyComboBox.Items.Add($policy.DisplayName) | Out-Null
+                    }
+                    
+                    $ExistingPolicyComboBox.IsEnabled = $true
+                    Add-StatusMessage "SUCCESS: Loaded $($geofencingPolicies.Count) geofencing policies"
                 }
-                
-                # Clear the cache and repopulate with only geofencing policies
-                $script:CAPoliciesCache = @{}
-                
-                $ExistingPolicyComboBox.Items.Clear()
-                foreach ($policy in $geofencingPolicies) {
-                    # Store policy ID in cache with display name as key
-                    $script:CAPoliciesCache[$policy.DisplayName] = $policy.Id
-                    $ExistingPolicyComboBox.Items.Add($policy.DisplayName) | Out-Null
-                }
-                
-                $ExistingPolicyComboBox.IsEnabled = $true
-                Add-StatusMessage "SUCCESS: Loaded $($geofencingPolicies.Count) geofencing policies"
                 
                 # Automatically load users after successful connection
                 Add-StatusMessage "Automatically loading users..."
                 $RefreshUsersBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
             } catch {
                 $errorMsg = $_.Exception.Message
-                Add-StatusMessage "ERROR: Failed to load CA policies - Conditional Access requires Azure AD Premium P1 or higher"
+                $statusCode = $_.Exception.Response.StatusCode.value__
+                $innerMsg = $_.Exception.InnerException.Message
                 
-                # This confirms it's a license issue
-                $window.Topmost = $true
-                [System.Windows.MessageBox]::Show(
-                    $window,
-                    "Conditional Access requires Azure AD Premium`n`n" +
-                    "Conditional Access Policies require Azure AD Premium P1 or higher.`n`n" +
-                    "This tenant appears to be using Entra ID Free.`n`n" +
-                    "For assistance, contact: b.dezeeuw@bizway.nl",
-                    "Premium Feature Required",
-                    [System.Windows.MessageBoxButton]::OK,
-                    [System.Windows.MessageBoxImage]::Warning
-                )
-                $window.Topmost = $true
+                Add-StatusMessage "ERROR: Failed to load CA policies"
+                Add-StatusMessage "  Error: $errorMsg"
+                if ($innerMsg) { Add-StatusMessage "  Details: $innerMsg" }
+                if ($statusCode) { Add-StatusMessage "  Status Code: $statusCode" }
                 
-                # Disconnect and reset
-                try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { }
-                $script:GraphConnected = $false
-                $SignInBtn.Visibility = "Visible"
-                $DisconnectBtn.Visibility = "Collapsed"
-                $RefreshUsersBtn.IsEnabled = $false
-                $ConnectionStatusText.Text = "Not Connected"
-                $ConnectionStatusText.Foreground = "Gray"
-                $ConnectionStatusBorder.Background = "#F0F0F0"
-                $ConnectionStatusBorder.BorderBrush = "Gray"
-                return
+                # Check if it's a licensing issue
+                if ($errorMsg -match "Premium|license|subscription|does not have") {
+                    Add-StatusMessage "  >>> This tenant requires Azure AD Premium P1 or P2 for Conditional Access"
+                }
             }
         }
     } catch {
@@ -1194,6 +1136,163 @@ $GitHubBtn.Add_Click({
 
 $EmailBtn.Add_Click({
     Start-Process "mailto:b.dezeeuw@bizway.nl"
+})
+
+$FixGraphModulesBtn.Add_Click({
+    try {
+        Add-StatusMessage "Starting Graph Modules cleanup..."
+        
+        # Disconnect from Graph if connected
+        if ($script:GraphConnected) {
+            Add-StatusMessage "Disconnecting from Microsoft Graph..."
+            try {
+                Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+            } catch { }
+            $script:GraphConnected = $false
+            $SignInBtn.Visibility = "Visible"
+            $DisconnectBtn.Visibility = "Collapsed"
+            $ConnectionStatusText.Text = "Not Connected"
+            $ConnectionStatusText.Foreground = "Gray"
+            $ConnectionStatusBorder.Background = "#F0F0F0"
+            $ConnectionStatusBorder.BorderBrush = "Gray"
+            Add-StatusMessage "Disconnected."
+        }
+        
+        # Unload all Graph modules from current session
+        Add-StatusMessage "Unloading Graph modules from current session..."
+        $loadedGraphModules = Get-Module -Name Microsoft.Graph.*
+        foreach ($mod in $loadedGraphModules) {
+            try {
+                Remove-Module -Name $mod.Name -Force -ErrorAction SilentlyContinue
+                Add-StatusMessage "  Unloaded: $($mod.Name)"
+            } catch { }
+        }
+        
+        Add-StatusMessage "Restarting script with Administrator permissions..."
+        Add-StatusMessage "Please wait while modules are reinstalled..."
+        
+        Start-Sleep -Milliseconds 500
+        
+        # Get current script path
+        $scriptPath = $PSCommandPath
+        if (-not $scriptPath) {
+            $scriptPath = Join-Path -Path $PSScriptRoot -ChildPath "Run-VacationMode.ps1"
+        }
+        
+        # Build PowerShell command to run as admin
+        $psCommand = @"
+# Clear screen and set up progress display
+Clear-Host
+`$host.UI.RawUI.WindowTitle = 'Fixing Microsoft Graph Modules'
+
+# Save current process ID to avoid killing ourselves
+`$currentPID = `$PID
+
+Write-Host '========================================' -ForegroundColor Cyan
+Write-Host ' Microsoft Graph Module Repair Tool' -ForegroundColor Cyan
+Write-Host '========================================' -ForegroundColor Cyan
+Write-Host ''
+
+# Wait for calling process to close completely
+Write-Host '[1/5] Waiting for application to close' -ForegroundColor Yellow
+for (`$i = 2; `$i -gt 0; `$i--) {
+    Write-Host "      `$i seconds..." -NoNewline
+    Start-Sleep -Seconds 1
+    Write-Host "`r      `$i seconds... Done" -ForegroundColor Green
+}
+Write-Host ''
+
+# Close all other PowerShell processes to release module locks
+Write-Host '[2/5] Closing other PowerShell processes' -ForegroundColor Yellow
+`$psProcesses = Get-Process -Name powershell, pwsh -ErrorAction SilentlyContinue | Where-Object { `$_.Id -ne `$currentPID }
+if (`$psProcesses) {
+    foreach (`$proc in `$psProcesses) {
+        try {
+            Write-Host "      Closing process PID `$(`$proc.Id)..." -NoNewline
+            `$proc.CloseMainWindow() | Out-Null
+            Start-Sleep -Milliseconds 500
+            if (-not `$proc.HasExited) {
+                `$proc.Kill()
+            }
+            Write-Host " Done" -ForegroundColor Green
+        } catch { }
+    }
+} else {
+    Write-Host "      No other PowerShell processes found" -ForegroundColor Green
+}
+
+# Give Windows time to release file locks
+Write-Host "      Waiting for file locks to release..." -NoNewline
+Start-Sleep -Seconds 2
+Write-Host " Done" -ForegroundColor Green
+Write-Host ''
+
+# Uninstall only required Graph modules for this application
+Write-Host '[3/5] Uninstalling Graph modules' -ForegroundColor Yellow
+`$requiredModules = @('Microsoft.Graph.Authentication', 'Microsoft.Graph.Users', 'Microsoft.Graph.Identity.SignIns')
+`$moduleIndex = 1
+foreach (`$mod in `$requiredModules) {
+    Write-Host "      [`$moduleIndex/`$(`$requiredModules.Count)] Uninstalling `$mod..." -NoNewline
+    try {
+        Uninstall-Module -Name `$mod -AllVersions -Force -ErrorAction Stop -WarningAction SilentlyContinue
+        Write-Host " Done" -ForegroundColor Green
+    } catch {
+        Write-Host " Warning (will overwrite)" -ForegroundColor DarkYellow
+    }
+    `$moduleIndex++
+}
+Write-Host ''
+
+# Install fresh versions
+Write-Host '[4/5] Installing fresh Graph modules' -ForegroundColor Yellow
+`$installModules = @(
+    @{Name='Microsoft.Graph.Authentication'; Display='Authentication'},
+    @{Name='Microsoft.Graph.Users'; Display='Users'},
+    @{Name='Microsoft.Graph.Identity.SignIns'; Display='Identity.SignIns'}
+)
+`$installIndex = 1
+foreach (`$mod in `$installModules) {
+    Write-Host "      [`$installIndex/`$(`$installModules.Count)] Installing `$(`$mod.Display)..." -NoNewline
+    Install-Module -Name `$mod.Name -Scope CurrentUser -Force -AllowClobber -SkipPublisherCheck -Repository PSGallery -WarningAction SilentlyContinue
+    Write-Host " Done" -ForegroundColor Green
+    `$installIndex++
+}
+Write-Host ''
+
+# Restart application
+Write-Host '[5/5] Restarting application' -ForegroundColor Yellow
+Write-Host ''
+Write-Host 'Graph modules reinstalled successfully!' -ForegroundColor Green
+Write-Host ''
+for (`$i = 3; `$i -gt 0; `$i--) {
+    Write-Host "Launching application in `$i..." -NoNewline
+    Start-Sleep -Seconds 1
+    Write-Host "`r                                  `r" -NoNewline
+}
+
+# Restart the application
+Start-Process -FilePath 'powershell.exe' -ArgumentList '-ExecutionPolicy Bypass -File "$scriptPath"'
+
+# Close this admin window
+Write-Host 'Closing this window...' -ForegroundColor Cyan
+Start-Sleep -Seconds 1
+exit
+"@
+        
+        # Save command to temp file
+        $tempScript = Join-Path -Path $env:TEMP -ChildPath "FixGraphModules_$(Get-Date -Format 'yyyyMMddHHmmss').ps1"
+        $psCommand | Out-File -FilePath $tempScript -Encoding UTF8 -Force
+        
+        # Start elevated process (changed -NoExit to just run and close)
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy Bypass -File `"$tempScript`"" -Verb RunAs
+        
+        # Close current window
+        $window.Close()
+        
+    } catch {
+        Add-StatusMessage "ERROR: Failed to fix Graph modules - $($_.Exception.Message)"
+        [System.Windows.MessageBox]::Show("Failed to fix Graph modules: $($_.Exception.Message)", "Error", "OK", "Error")
+    }
 })
 
 $ExcludeCountriesBtn.Add_Click({
