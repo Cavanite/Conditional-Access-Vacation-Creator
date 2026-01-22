@@ -23,34 +23,19 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ## Usage
 
 1. **Sign In**: Click "Sign In to Microsoft Graph" and authenticate
-2. **Select Users**: Either click "Refresh Users" and select from the list, or manually add users by typing their email
+2. **Select Users**: The users will be shown automatically or either click "Refresh Users" and select from the list
 3. **Select Destination**: Choose the vacation country from the dropdown
-(or create new locations with the upcoming country creation script)
+(or create new locations using the create countries button)
 4. **Select Main Policy**: Choose your main geofencing policy to exclude users from
-5. **Enter Details**:
+5. **Select the user their home country**: Choose the user there home location this will prevent user lock-out.
+6. **Enter Details**:
    - Ticket Number (for tracking)
    - End Date (format: dd-mm-yyyy)
-6. **Create Policy**: Click "Create CA Policy"
-7. **Enable**: Go to Entra ID portal and enable the policy after review
+7. **Create Policy**: Click "Create CA Policy"
+8. **Enable**: Go to Entra ID portal and enable the policy after review
 
    **Fix graph modules** : I recently came across and issue when my computer has been updates or got some new patches my graph modules were corrupted. The button Fix Graph Modules will solve this issue.
    The button wil re-install the Graph Modules needed for this application to run.
-
-### Technical Flow
-
-1. **Authentication**: Connects to Microsoft Graph using OAuth 2.0
-2. **Data Retrieval**:
-   - Fetches all non-admin users from Entra ID
-   - Loads Named Locations (geofencing IP country locations)
-   - Retrieves existing Conditional Access policies
-3. **User Selection**: Maps display names to user GUIDs
-4. **Location Mapping**: Resolves location names to location GUIDs
-5. **Policy Creation**:
-   - Builds JSON policy object
-   - Sets location condition (all locations EXCEPT vacation destination)
-   - Configures block control
-   - Creates policy via Graph API
-6. **Exclusion Update**: Adds users to exclusion list of main policy
 
 ### Policy JSON Structure
 How It Works
@@ -61,16 +46,11 @@ The tool creates a Conditional Access policy that:
 - Uses Named Locations configured in your Entra ID tenant
 - Optionally excludes users from your main geofencing policy
 
+
 **Policy Naming:**
 - Single user: `GEO-jdoe-Spain-INC123456-31-12-2026-VACATIONMODE`
 - Multiple users: `GEO-jdoe-Plus2-Spain-INC123456-31-12-2026-VACATIONMODE`
 ---
-
-### Support Resources
-
-- **Microsoft Entra ID Documentation**: [Conditional Access Documentation](https://learn.microsoft.com/entra/identity/conditional-access/)
-- **Microsoft Graph API**: [Graph API Reference](https://learn.microsoft.com/graph/api/resources/conditionalaccesspolicy)
-- **Contact Author**: b.dezeeuw@bizway.nl
 
 ## Author
 
@@ -83,7 +63,7 @@ Bizway BV
 **Note:** Policies are created in disabled state. Always review and test before enabling in production.
 
 
-Troubleshooting
+### Troubleshooting
 
 **"No geofencing policy found"**  
 Create a main geofencing policy with keywords like "geofence", "country", or "blocklist" in the name.
@@ -102,3 +82,7 @@ Run as Administrator and manually install: `Install-Module Microsoft.Graph -Scop
 
 **Authentication failed**
 Please use the button "Fix Graph Modules" this will solve most of the Authentication related issues.
+
+### Feature updates
+- Also be able to revert back the vacation mode action.
+   this will include the user from the main policy and delete the Conditional Access policy created for this user.
