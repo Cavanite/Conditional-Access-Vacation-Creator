@@ -33,6 +33,9 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 6. **Create Policy**: Click "Create CA Policy"
 7. **Enable**: Go to Entra ID portal and enable the policy after review
 
+   **Fix graph modules** : I recently came across and issue when my computer has been updates or got some new patches my graph modules were corrupted. The button Fix Graph Modules will solve this issue.
+   The button wil re-install the Graph Modules needed for this application to run.
+
 ### Technical Flow
 
 1. **Authentication**: Connects to Microsoft Graph using OAuth 2.0
@@ -96,3 +99,6 @@ Use format `dd-mm-yyyy` (e.g., `31-12-2026`) with dashes, not slashes.
 
 **Module installation fails**  
 Run as Administrator and manually install: `Install-Module Microsoft.Graph -Scope CurrentUser`
+
+**Authentication failed**
+Please use the button "Fix Graph Modules" this will solve most of the Authentication related issues.
