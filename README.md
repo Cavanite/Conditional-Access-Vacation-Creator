@@ -49,7 +49,6 @@ The tool creates a Conditional Access policy that:
 
 **Policy Naming:**
 - Single user: `GEO-jdoe-Spain-INC123456-31-12-2026-VACATIONMODE`
-- Multiple users: `GEO-jdoe-Plus2-Spain-INC123456-31-12-2026-VACATIONMODE`
 ---
 
 ## Author
@@ -86,3 +85,6 @@ Please use the button "Fix Graph Modules" this will solve most of the Authentica
 ### Feature updates
 - Also be able to revert back the vacation mode action.
    this will include the user from the main policy and delete the Conditional Access policy created for this user.
+
+-  The user of the script will be able to get a calendar item so they can import this in there own calendar.
+   This way you will be notified when you need to revert back the changes.
