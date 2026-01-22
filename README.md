@@ -80,7 +80,7 @@ Use format `dd-mm-yyyy` (e.g., `31-12-2026`) with dashes, not slashes.
 **Module installation fails**  
 Run as Administrator and manually install: `Install-Module Microsoft.Graph -Scope CurrentUser`
 
-**Authentication failed**
+**"Authentication failed"**
 Please use the button "Fix Graph Modules" this will solve most of the Authentication related issues.
 
 ### Feature updates
