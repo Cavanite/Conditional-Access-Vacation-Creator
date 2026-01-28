@@ -9,8 +9,37 @@ param(
     [Parameter()]
     [string]$ConfigPath
 )
+# Log file location
+$script:LogDirectory = 'C:\Windows\Temp'
+$script:LogFilePath = Join-Path -Path $script:LogDirectory -ChildPath 'ConditionalAccessVacationCreator.log'
 #######################################################################################################
+# Logging Function
+function Write-Log {
+    param (
+        [string]$Message,
+        [ValidateSet('Debug', 'Information', 'Warning', 'Error')]
+        [string]$Level = 'Information'
+    )
 
+    $levels = @{
+        'Debug'       = 1
+        'Information' = 2
+        'Warning'     = 3
+        'Error'       = 4
+    }
+
+    if ($levels[$Level] -ge $levels[$LogLevel]) {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $logLine = "[$timestamp] [$Level] $Message"
+        Write-Host $logLine
+
+        if (-not (Test-Path -Path $script:LogDirectory)) {
+            New-Item -Path $script:LogDirectory -ItemType Directory -Force | Out-Null
+        }
+
+        Add-Content -Path $script:LogFilePath -Value $logLine
+    }
+}
 #######################################################################################################
 # Hide PowerShell console window
 Add-Type -Name Window -Namespace Console -MemberDefinition '
@@ -506,6 +535,14 @@ $RefreshUsersBtn.IsEnabled = $false
 # Button Event Handlers
 # Update policy name when selection changes
 $UsersListBox.Add_SelectionChanged({
+        $selectedUsers = $UsersListBox.SelectedItems
+        if ($selectedUsers.Count -gt 0) {
+            $selectedUserList = $selectedUsers -join '; '
+            Write-Log -Message "Selected users updated ($($selectedUsers.Count)): $selectedUserList" -Level "Information"
+        }
+        else {
+            Write-Log -Message "Selected users cleared" -Level "Information"
+        }
         Update-PolicyName
     })
 
@@ -824,6 +861,8 @@ $CreatePolicyBtn.Add_Click({
             $ticketNumber = $TicketNumberTextBox.Text.Trim()
             $endDate = $EndDateTextBox.Text.Trim()
             $policyName = $PolicyNameTextBox.Text.Trim()
+
+            Write-Log -Message "Create CA policy requested. PolicyName='$policyName', Users=$($selectedUsers.Count), Country='$selectedCountry', Ticket='$ticketNumber', EndDate='$endDate'" -Level "Information"
         
             # Validate user selection
             if ($selectedUsers.Count -eq 0) {
@@ -931,6 +970,7 @@ Do you want to proceed?
         
             if ($result -ne "Yes") {
                 Add-StatusMessage "Policy creation cancelled by user."
+                Write-Log -Message "Create CA policy cancelled by user." -Level "Warning"
                 return
             }
         
@@ -990,6 +1030,7 @@ Do you want to proceed?
             Add-StatusMessage "Policy ID: $($newPolicy.id)"
             Add-StatusMessage "Policy Name: $($newPolicy.displayName)"
             Add-StatusMessage "State: $($newPolicy.state) (remember to enable after review)"
+            Write-Log -Message "CA policy created successfully. PolicyId='$($newPolicy.id)', PolicyName='$($newPolicy.displayName)', State='$($newPolicy.state)'" -Level "Information"
         
             # Update existing geofencing policy to exclude these users
             if (-not [string]::IsNullOrWhiteSpace($selectedExistingPolicy)) {
@@ -1070,6 +1111,7 @@ Do you want to proceed?
         }
         catch {
             Add-StatusMessage "ERROR: Policy creation failed - $($_.Exception.Message)"
+            Write-Log -Message "Create CA policy failed: $($_.Exception.Message)" -Level "Error"
             [System.Windows.MessageBox]::Show("Failed to create policy:`n`n$($_.Exception.Message)", "Creation Error", "OK", "Error")
         }
     })
