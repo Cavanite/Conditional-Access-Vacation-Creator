@@ -920,8 +920,7 @@ This policy will:
 - BLOCK access from all locations EXCEPT:
   * The vacation destination ($selectedCountry)
   * The user's current location ($selectedUserCurrentLocation)
-- Be created in DISABLED state for review
-- Require manual enablement after verification
+- Be created in ENABLED state
 
 Do you want to proceed?
 "@
@@ -956,7 +955,7 @@ Do you want to proceed?
             # Build the policy object
             $policyObject = @{
                 "displayName"   = $policyName
-                "state"         = "disabled"
+                "state"         = "enabled"
                 "conditions"    = @{
                     "applications" = @{
                         "includeApplications" = @("All")
@@ -989,7 +988,7 @@ Do you want to proceed?
             Add-StatusMessage "SUCCESS: Conditional Access policy created!"
             Add-StatusMessage "Policy ID: $($newPolicy.id)"
             Add-StatusMessage "Policy Name: $($newPolicy.displayName)"
-            Add-StatusMessage "State: $($newPolicy.state) (remember to enable after review)"
+            Add-StatusMessage "State: $($newPolicy.state)"
         
             # Update existing geofencing policy to exclude these users
             if (-not [string]::IsNullOrWhiteSpace($selectedExistingPolicy)) {
@@ -1057,13 +1056,13 @@ Do you want to proceed?
             }
         
             # Show success message
-            $successMsg = "Conditional Access policy created successfully!`n`nPolicy Name: $policyName`nPolicy ID: $($newPolicy.id)`nState: disabled`n`n"
+            $successMsg = "Conditional Access policy created successfully!`n`nPolicy Name: $policyName`nPolicy ID: $($newPolicy.id)`nState: enabled`n`n"
         
             if (-not [string]::IsNullOrWhiteSpace($selectedExistingPolicy)) {
                 $successMsg += "Main policy '$selectedExistingPolicy' updated to exclude vacation users.`n`n"
             }
         
-            $successMsg += "Please review and enable the policy in the Azure Portal."
+            $successMsg += "Please review the policy in the Azure Portal."
         
             [System.Windows.MessageBox]::Show($successMsg, "Success", "OK", "Information")
         
