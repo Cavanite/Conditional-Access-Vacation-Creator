@@ -242,10 +242,22 @@ foreach ($module in $modules) {
                         <TextBlock Grid.Row="0" Text="Select the user's current location (to avoid blocking them before they leave):" 
                                    Margin="5" TextWrapping="Wrap" FontSize="11"/>
                         
-                        <ComboBox Grid.Row="1" Name="UserCurrentLocationComboBox" 
-                                  Margin="5" Height="30"
-                                  IsEditable="True"
-                                  IsTextSearchEnabled="True"/>
+                        <Grid Grid.Row="1" Margin="5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <ComboBox Grid.Column="0" Name="UserCurrentLocationComboBox" 
+                                      Height="30"
+                                      IsEditable="True"
+                                      IsTextSearchEnabled="True"/>
+                            
+                            <Button Grid.Column="1" Name="RefreshHomeCountryBtn" 
+                                    Content="RF" Width="35" Height="30" Margin="5,0,0,0"
+                                    ToolTip="Refresh home country list"
+                                    FontSize="16" Padding="0"/>
+                        </Grid>
                     </Grid>
                 </GroupBox>
                 
@@ -360,6 +372,8 @@ $StatusTextBox = $window.FindName("StatusTextBox")
 $RefreshUsersBtn = $window.FindName("RefreshUsersBtn")
 $SelectAllUsersBtn = $window.FindName("SelectAllUsersBtn")
 $ClearUsersBtn = $window.FindName("ClearUsersBtn")
+$RefreshCountriesBtn = $window.FindName("RefreshCountriesBtn")
+$RefreshHomeCountryBtn = $window.FindName("RefreshHomeCountryBtn")
 $CreatePolicyBtn = $window.FindName("CreatePolicyBtn")
 $CloseBtn = $window.FindName("CloseBtn")
 $SignInBtn = $window.FindName("SignInBtn")
@@ -640,7 +654,8 @@ $RefreshUsersBtn.Add_Click({
     
         try {
             Add-StatusMessage "Fetching users from Entra ID..."
-            $users = Get-MgUser -All -Property Id, DisplayName, UserPrincipalName, AssignedLicenses | Select-Object Id, DisplayName, UserPrincipalName, AssignedLicenses
+            # Fetch all users including those with and without licenses
+            $users = Get-MgUser -All -Property Id, DisplayName, UserPrincipalName, AssignedLicenses, AccountEnabled | Select-Object Id, DisplayName, UserPrincipalName, AssignedLicenses, AccountEnabled
         
             # Filter patterns for admin and breakglass accounts
             $excludePatterns = @(
@@ -687,33 +702,17 @@ $RefreshUsersBtn.Add_Click({
                     }
                 }
             
-                # Check if user has admin roles
-                $hasAdminRole = $false
-                if (-not $shouldExclude) {
-                    try {
-                        $userRoles = Get-MgUserMemberOf -UserId $user.Id -All -ErrorAction SilentlyContinue
-                        foreach ($role in $userRoles) {
-                            $roleName = $role.AdditionalProperties.displayName
-                            foreach ($pattern in $adminRolePatterns) {
-                                if ($roleName -like $pattern) {
-                                    $hasAdminRole = $true
-                                    break
-                                }
-                            }
-                            if ($hasAdminRole) { break }
-                        }
-                    }
-                    catch {
-                        # Silent fail if role retrieval fails
-                    }
+                # Debug logging
+                if ($user.UserPrincipalName -like "*coen*") {
+                    Write-Host "DEBUG: Found coen user - DisplayName: $($user.DisplayName), isExternal: $isExternal, shouldExclude: $shouldExclude"
                 }
             
-                # Exclude if external, no license, matches exclusion pattern, or has admin role
-                if ($isExternal -or -not $hasLicense -or $shouldExclude -or $hasAdminRole) {
+                # Exclude if external or matches exclusion pattern
+                if ($isExternal -or $shouldExclude) {
                     $filteredCount++
                 }
                 else {
-                    # Only add internal, licensed, non-admin/non-breakglass users
+                    # Only add internal, non-breakglass users (license check removed, admin role check removed)
                     $displayText = "$($user.DisplayName) ($($user.UserPrincipalName))"
                     # Store GUID with display text as key
                     $script:UserCache[$displayText] = $user.Id
@@ -813,6 +812,32 @@ $RefreshCountriesBtn.Add_Click({
         catch {
             Add-StatusMessage "ERROR: Failed to refresh country list - $($_.Exception.Message)"
             [System.Windows.MessageBox]::Show("Failed to refresh country list: $($_.Exception.Message)", "Error", "OK", "Error")
+        }
+    })
+
+$RefreshHomeCountryBtn.Add_Click({
+        if (-not $script:GraphConnected) {
+            Add-StatusMessage "ERROR: Please sign in to Microsoft Graph first."
+            [System.Windows.MessageBox]::Show("Please sign in to Microsoft Graph first.", "Not Connected", "OK", "Warning")
+            return
+        }
+    
+        try {
+            Add-StatusMessage "Refreshing home country list..."
+            $namedLocations = Get-MgIdentityConditionalAccessNamedLocation -All -ErrorAction Stop
+        
+            # Clear and repopulate
+            $UserCurrentLocationComboBox.Items.Clear()
+        
+            foreach ($location in $namedLocations) {
+                $UserCurrentLocationComboBox.Items.Add($location.DisplayName) | Out-Null
+            }
+        
+            Add-StatusMessage "SUCCESS: Refreshed home country list ($($namedLocations.Count) countries available)"
+        }
+        catch {
+            Add-StatusMessage "ERROR: Failed to refresh home country list - $($_.Exception.Message)"
+            [System.Windows.MessageBox]::Show("Failed to refresh home country list: $($_.Exception.Message)", "Error", "OK", "Error")
         }
     })
 
