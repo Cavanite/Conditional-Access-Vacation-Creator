@@ -338,6 +338,10 @@ foreach ($module in $modules) {
             
             <!-- Action Buttons -->
             <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Name="RevertVacationModeBtn" Content="Revert Vacation Mode" 
+                        Width="150" Height="35" Margin="5"
+                        FontWeight="Bold" Background="#0078D4" Foreground="White"
+                        ToolTip="Revert vacation mode settings"/>
                 <Button Name="FixGraphModulesBtn" Content="Fix Graph Modules" 
                         Width="150" Height="35" Margin="5"
                         FontWeight="Bold" Background="#FF6B00" Foreground="White"
@@ -386,6 +390,7 @@ $ClearStatusBtn = $window.FindName("ClearStatusBtn")
 $GitHubBtn = $window.FindName("GitHubBtn")
 $EmailBtn = $window.FindName("EmailBtn")
 $FixGraphModulesBtn = $window.FindName("FixGraphModulesBtn")
+$RevertVacationModeBtn = $window.FindName("RevertVacationModeBtn")
 
 # Global variable to track Graph connection status
 $script:GraphConnected = $false
@@ -1676,6 +1681,502 @@ $ExcludeCountriesBtn.Add_Click({
         catch {
             [System.Windows.MessageBox]::Show(
                 "Failed to open country creation window: $($_.Exception.Message)",
+                "Error",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Error
+            )
+        }
+    })
+
+$RevertVacationModeBtn.Add_Click({
+        # Create the revert vacation mode window
+        [xml]$revertVacationXaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Revert Vacation Mode Policies" Height="700" Width="1000"
+    WindowStartupLocation="CenterScreen" Topmost="True">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <TextBlock Grid.Row="0" Text="Revert Vacation Mode Policies" 
+                   FontSize="18" FontWeight="Bold" 
+                   HorizontalAlignment="Left" Margin="10,10,10,5"/>
+        
+        <TextBlock Grid.Row="1" Text="Select vacation mode policies to revert. Users will be added back to the main geofencing policy." 
+                   FontSize="11" TextWrapping="Wrap"
+                   HorizontalAlignment="Left" Margin="10,0,10,10"/>
+        
+        <!-- Policies List -->
+        <GroupBox Grid.Row="2" Header="Available Vacation Mode Policies" 
+                  FontSize="12" FontWeight="Bold" Margin="10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="5">
+                    <Button Name="RefreshPoliciesBtn" Content="Refresh"
+                            Width="100" Height="30" Margin="0,0,10,0"
+                            FontWeight="Bold" Background="#0078D4" Foreground="White"/>
+                    <Button Name="SelectAllPoliciesBtn" Content="Select All" 
+                            Width="100" Height="30" Margin="0,0,10,0"/>
+                    <Button Name="ClearSelectionBtn" Content="Clear Selection" 
+                            Width="120" Height="30"/>
+                </StackPanel>
+                
+                <ScrollViewer Grid.Row="1" 
+                              VerticalScrollBarVisibility="Auto" 
+                              HorizontalScrollBarVisibility="Auto"
+                              Margin="5">
+                    <StackPanel Name="PoliciesStackPanel" 
+                                Orientation="Vertical"/>
+                </ScrollViewer>
+            </Grid>
+        </GroupBox>
+        
+        <!-- Main Geofencing Policy Selection -->
+        <GroupBox Grid.Row="3" Header="Main Geofencing Policy (Optional)" 
+                  FontSize="12" FontWeight="Bold" Margin="10,0,10,10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <TextBlock Grid.Row="0" 
+                           Text="Select the main geofencing policy to add users back to (removes them from exclusion list):" 
+                           Margin="5,5,5,5" FontSize="11" TextWrapping="Wrap"/>
+                
+                <ComboBox Grid.Row="1" Name="MainPolicyComboBox" 
+                          Height="30" Margin="5"
+                          VerticalContentAlignment="Center"
+                          Padding="5"/>
+            </Grid>
+        </GroupBox>
+        
+        <!-- Action Buttons -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" 
+                    HorizontalAlignment="Right" Margin="10,0,10,10">
+            <Button Name="RevertSelectedBtn" Content="Revert Selected Policies" 
+                    Width="180" Height="40" Margin="5" 
+                    FontWeight="Bold" Background="#D13438" Foreground="White"
+                    ToolTip="Delete selected vacation policies and restore users to main policy"/>
+            <Button Name="CancelRevertBtn" Content="Cancel" 
+                    Width="100" Height="40" Margin="5"/>
+        </StackPanel>
+    </Grid>
+</Window>
+"@
+    
+        try {
+            # Check if connected to Graph
+            if (-not $script:GraphConnected) {
+                [System.Windows.MessageBox]::Show(
+                    "Please sign in to Microsoft Graph first.",
+                    "Not Connected",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Warning
+                )
+                return
+            }
+            
+            $revertReader = New-Object System.Xml.XmlNodeReader $revertVacationXaml
+            $revertWindow = [Windows.Markup.XamlReader]::Load($revertReader)
+        
+            # Get UI elements
+            $PoliciesStackPanel = $revertWindow.FindName("PoliciesStackPanel")
+            $MainPolicyComboBox = $revertWindow.FindName("MainPolicyComboBox")
+            $RefreshPoliciesBtn = $revertWindow.FindName("RefreshPoliciesBtn")
+            $SelectAllPoliciesBtn = $revertWindow.FindName("SelectAllPoliciesBtn")
+            $ClearSelectionBtn = $revertWindow.FindName("ClearSelectionBtn")
+            $RevertSelectedBtn = $revertWindow.FindName("RevertSelectedBtn")
+            $CancelRevertBtn = $revertWindow.FindName("CancelRevertBtn")
+            
+            # Store vacation policies data
+            $script:VacationPolicies = @{}
+            
+            # Function to load vacation mode policies
+            function Load-VacationPolicies {
+                try {
+                    Add-StatusMessage "Fetching vacation mode policies..."
+                    
+                    $PoliciesStackPanel.Children.Clear()
+                    $script:VacationPolicies = @{}
+                    
+                    # Fetch all CA policies
+                    $allPolicies = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies" -ErrorAction Stop
+                    
+                    # Filter policies that contain "VACATIONMODE"
+                    $vacationPolicies = $allPolicies.value | Where-Object { $_.displayName -like "*VACATIONMODE*" }
+                    
+                    if ($vacationPolicies.Count -eq 0) {
+                        $noDataText = New-Object System.Windows.Controls.TextBlock
+                        $noDataText.Text = "No vacation mode policies found."
+                        $noDataText.FontSize = 12
+                        $noDataText.Margin = "10"
+                        $noDataText.Foreground = "Gray"
+                        $PoliciesStackPanel.Children.Add($noDataText) | Out-Null
+                        
+                        Add-StatusMessage "No vacation mode policies found."
+                        return
+                    }
+                    
+                    # Create checkbox for each policy
+                    foreach ($policy in $vacationPolicies) {
+                        # Get user details for this policy
+                        $userIds = $policy.conditions.users.includeUsers
+                        $userCount = $userIds.Count
+                        
+                        # Create a container for the checkbox and details
+                        $policyPanel = New-Object System.Windows.Controls.StackPanel
+                        $policyPanel.Orientation = "Vertical"
+                        $policyPanel.Margin = "5,5,5,10"
+                        
+                        # Create checkbox
+                        $checkBox = New-Object System.Windows.Controls.CheckBox
+                        $checkBox.Content = $policy.displayName
+                        $checkBox.FontWeight = "Bold"
+                        $checkBox.FontSize = 12
+                        $checkBox.Tag = $policy.id
+                        $checkBox.Margin = "0,0,0,5"
+                        
+                        # Create details text
+                        $detailsText = New-Object System.Windows.Controls.TextBlock
+                        $detailsText.FontSize = 10
+                        $detailsText.Foreground = "Gray"
+                        $detailsText.Margin = "20,0,0,0"
+                        $detailsText.Text = "Policy ID: $($policy.id)`nState: $($policy.state)`nUsers: $userCount`nCreated: $(if ($policy.createdDateTime) { (Get-Date $policy.createdDateTime).ToString('yyyy-MM-dd HH:mm') } else { 'Unknown' })"
+                        
+                        # Add to panel
+                        $policyPanel.Children.Add($checkBox) | Out-Null
+                        $policyPanel.Children.Add($detailsText) | Out-Null
+                        
+                        # Add separator
+                        $separator = New-Object System.Windows.Controls.Separator
+                        $separator.Margin = "0,5,0,0"
+                        $policyPanel.Children.Add($separator) | Out-Null
+                        
+                        $PoliciesStackPanel.Children.Add($policyPanel) | Out-Null
+                        
+                        # Store policy data including users
+                        $script:VacationPolicies[$policy.id] = @{
+                            Name   = $policy.displayName
+                            Id     = $policy.id
+                            Users  = $userIds
+                            Policy = $policy
+                        }
+                    }
+                    
+                    Add-StatusMessage "Found $($vacationPolicies.Count) vacation mode policies."
+                    
+                    # Load main policies (all non-vacation CA policies)
+                    $MainPolicyComboBox.Items.Clear()
+                    $mainPolicies = $allPolicies.value | Where-Object { $_.displayName -notlike "*VACATIONMODE*" } | Sort-Object displayName
+                    foreach ($mainPolicy in $mainPolicies) {
+                        $MainPolicyComboBox.Items.Add($mainPolicy.displayName) | Out-Null
+                        $script:CAPoliciesCache[$mainPolicy.displayName] = $mainPolicy.id
+                    }
+                    
+                    # Try to pre-select a geofencing policy
+                    $geofencingPolicy = $mainPolicies | Where-Object { $_.displayName -like "*GEO*" -or $_.displayName -like "*geofenc*" } | Select-Object -First 1
+                    if ($geofencingPolicy) {
+                        $MainPolicyComboBox.SelectedItem = $geofencingPolicy.displayName
+                    }
+                }
+                catch {
+                    Add-StatusMessage "ERROR: Failed to load vacation policies - $($_.Exception.Message)"
+                    [System.Windows.MessageBox]::Show(
+                        "Failed to load vacation policies:`n`n$($_.Exception.Message)",
+                        "Error",
+                        [System.Windows.MessageBoxButton]::OK,
+                        [System.Windows.MessageBoxImage]::Error
+                    )
+                }
+            }
+            
+            # Load policies initially
+            Load-VacationPolicies
+            
+            # Refresh button handler
+            $RefreshPoliciesBtn.Add_Click({
+                    Load-VacationPolicies
+                })
+            
+            # Select All button handler
+            $SelectAllPoliciesBtn.Add_Click({
+                    foreach ($child in $PoliciesStackPanel.Children) {
+                        if ($child -is [System.Windows.Controls.StackPanel]) {
+                            foreach ($element in $child.Children) {
+                                if ($element -is [System.Windows.Controls.CheckBox]) {
+                                    $element.IsChecked = $true
+                                }
+                            }
+                        }
+                    }
+                })
+            
+            # Clear Selection button handler
+            $ClearSelectionBtn.Add_Click({
+                    foreach ($child in $PoliciesStackPanel.Children) {
+                        if ($child -is [System.Windows.Controls.StackPanel]) {
+                            foreach ($element in $child.Children) {
+                                if ($element -is [System.Windows.Controls.CheckBox]) {
+                                    $element.IsChecked = $false
+                                }
+                            }
+                        }
+                    }
+                })
+            
+            # Revert Selected button handler
+            $RevertSelectedBtn.Add_Click({
+                    try {
+                        # Get selected policies
+                        $selectedPolicyIds = @()
+                        $allUsersToRestore = @()
+                    
+                        foreach ($child in $PoliciesStackPanel.Children) {
+                            if ($child -is [System.Windows.Controls.StackPanel]) {
+                                foreach ($element in $child.Children) {
+                                    if ($element -is [System.Windows.Controls.CheckBox] -and $element.IsChecked) {
+                                        $policyId = $element.Tag
+                                        $selectedPolicyIds += $policyId
+                                    
+                                        # Collect users from this policy
+                                        if ($script:VacationPolicies.ContainsKey($policyId)) {
+                                            $allUsersToRestore += $script:VacationPolicies[$policyId].Users
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    
+                        if ($selectedPolicyIds.Count -eq 0) {
+                            [System.Windows.MessageBox]::Show(
+                                "Please select at least one policy to revert.",
+                                "No Selection",
+                                [System.Windows.MessageBoxButton]::OK,
+                                [System.Windows.MessageBoxImage]::Warning
+                            )
+                            return
+                        }
+                    
+                        # Remove duplicates from user list
+                        $allUsersToRestore = $allUsersToRestore | Select-Object -Unique
+                    
+                        # Build confirmation message
+                        $policyNames = $selectedPolicyIds | ForEach-Object { 
+                            if ($script:VacationPolicies.ContainsKey($_)) {
+                                "  - " + $script:VacationPolicies[$_].Name
+                            }
+                        }
+                    
+                        $confirmMessage = @"
+Are you sure you want to revert these vacation mode policies?
+
+Policies to Delete ($($selectedPolicyIds.Count)):
+$($policyNames -join "`n")
+
+Users affected: $($allUsersToRestore.Count)
+
+This will:
+1. DELETE the selected vacation mode policies
+2. REMOVE users from the exclusion list of the main geofencing policy (if selected)
+
+This action CANNOT be undone!
+
+Do you want to proceed?
+"@
+                    
+                        $result = [System.Windows.MessageBox]::Show(
+                            $confirmMessage,
+                            "Confirm Revert",
+                            [System.Windows.MessageBoxButton]::YesNo,
+                            [System.Windows.MessageBoxImage]::Warning
+                        )
+                    
+                        if ($result -ne "Yes") {
+                            Add-StatusMessage "Revert operation cancelled by user."
+                            return
+                        }
+                    
+                        # Delete vacation policies
+                        $deleteSuccess = 0
+                        $deleteFailed = 0
+                    
+                        foreach ($policyId in $selectedPolicyIds) {
+                            try {
+                                $policyName = $script:VacationPolicies[$policyId].Name
+                                Add-StatusMessage "Deleting policy: $policyName..."
+                            
+                                Invoke-MgGraphRequest -Method DELETE -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/$policyId" -ErrorAction Stop
+                            
+                                Add-StatusMessage "SUCCESS: Deleted policy '$policyName'"
+                                $deleteSuccess++
+                            }
+                            catch {
+                                Add-StatusMessage "ERROR: Failed to delete policy $policyId - $($_.Exception.Message)"
+                                $deleteFailed++
+                            }
+                        }
+                    
+                        # Update main geofencing policy to remove users from exclusion
+                        $mainPolicyUpdated = $false
+                        $selectedMainPolicy = $MainPolicyComboBox.SelectedItem
+                    
+                        if (-not [string]::IsNullOrWhiteSpace($selectedMainPolicy) -and $allUsersToRestore.Count -gt 0) {
+                            try {
+                                Add-StatusMessage "Restoring users to main geofencing policy..."
+                                Add-StatusMessage "Users to restore: $($allUsersToRestore.Count)"
+                                Add-StatusMessage "User IDs: $($allUsersToRestore -join ', ')"
+                            
+                                # Get main policy ID
+                                $mainPolicyId = $script:CAPoliciesCache[$selectedMainPolicy]
+                            
+                                if ($mainPolicyId) {
+                                    # Fetch current policy
+                                    $currentPolicy = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/$mainPolicyId" -ErrorAction Stop
+                                
+                                    # Get current excluded users
+                                    $currentExcludedUsers = @()
+                                    if ($currentPolicy.conditions.users.excludeUsers) {
+                                        $currentExcludedUsers = @($currentPolicy.conditions.users.excludeUsers)
+                                    }
+                                
+                                    Add-StatusMessage "Current excluded users count: $($currentExcludedUsers.Count)"
+                                    Add-StatusMessage "Current excluded: $($currentExcludedUsers -join ', ')"
+                                
+                                    # Remove vacation users from exclusion list
+                                    $updatedExcludedUsers = $currentExcludedUsers | Where-Object { $_ -notin $allUsersToRestore }
+                                    
+                                    # Ensure we always have a proper array (not null, not a single value)
+                                    if ($null -eq $updatedExcludedUsers) {
+                                        $updatedExcludedUsers = @()
+                                    }
+                                    elseif ($updatedExcludedUsers -isnot [array]) {
+                                        $updatedExcludedUsers = @($updatedExcludedUsers)
+                                    }
+                                
+                                    Add-StatusMessage "Updated excluded users count: $($updatedExcludedUsers.Count)"
+                                    Add-StatusMessage "Updated excluded: $($updatedExcludedUsers -join ', ')"
+                                    Add-StatusMessage "Removed $($currentExcludedUsers.Count - $updatedExcludedUsers.Count) users from exclusion list"
+                                    
+                                    # Update the policy - use same pattern as the working create function
+                                    $updateBody = @{
+                                        "conditions"      = @{
+                                            "users"            = @{
+                                                "includeUsers"  = $currentPolicy.conditions.users.includeUsers
+                                                "excludeUsers"  = $updatedExcludedUsers
+                                                "includeGroups" = $currentPolicy.conditions.users.includeGroups
+                                                "excludeGroups" = $currentPolicy.conditions.users.excludeGroups
+                                            }
+                                            "applications"     = $currentPolicy.conditions.applications
+                                            "locations"        = $currentPolicy.conditions.locations
+                                            "platforms"        = $currentPolicy.conditions.platforms
+                                            "signInRiskLevels" = $currentPolicy.conditions.signInRiskLevels
+                                            "userRiskLevels"   = $currentPolicy.conditions.userRiskLevels
+                                            "clientAppTypes"   = $currentPolicy.conditions.clientAppTypes
+                                        }
+                                        "grantControls"   = $currentPolicy.grantControls
+                                        "sessionControls" = $currentPolicy.sessionControls
+                                        "state"           = $currentPolicy.state
+                                    }
+                                
+                                    $updateJson = $updateBody | ConvertTo-Json -Depth 10
+                                    Add-StatusMessage "Sending update to Graph API..."
+                                    Invoke-MgGraphRequest -Method PATCH -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/$mainPolicyId" -Body $updateJson -ContentType "application/json"
+                                    
+                                    Add-StatusMessage "SUCCESS: Restored $($allUsersToRestore.Count) users to main policy '$selectedMainPolicy'"
+                                    $mainPolicyUpdated = $true
+                                }
+                                else {
+                                    Add-StatusMessage "WARNING: Could not find ID for main policy '$selectedMainPolicy'"
+                                }
+                            }
+                            catch {
+                                Add-StatusMessage "ERROR: Failed to update main policy - $($_.Exception.Message)"
+                                
+                                # Try to extract more details from the error
+                                if ($_.ErrorDetails.Message) {
+                                    try {
+                                        $errorObj = $_.ErrorDetails.Message | ConvertFrom-Json
+                                        if ($errorObj.error) {
+                                            Add-StatusMessage "Error Code: $($errorObj.error.code)"
+                                            Add-StatusMessage "Error Message: $($errorObj.error.message)"
+                                            if ($errorObj.error.details) {
+                                                foreach ($detail in $errorObj.error.details) {
+                                                    Add-StatusMessage "  Detail: $($detail.message)"
+                                                }
+                                            }
+                                        }
+                                    }
+                                    catch {
+                                        Add-StatusMessage "Raw error details: $($_.ErrorDetails.Message)"
+                                    }
+                                }
+                                
+                                [System.Windows.MessageBox]::Show(
+                                    "Policies deleted but failed to update main policy:`n`n$($_.Exception.Message)",
+                                    "Partial Success",
+                                    [System.Windows.MessageBoxButton]::OK,
+                                    [System.Windows.MessageBoxImage]::Warning
+                                )
+                            }
+                        }
+                    
+                        # Show summary
+                        $summaryMessage = "Revert Operation Complete`n`n"
+                        $summaryMessage += "Policies Deleted: $deleteSuccess`n"
+                        if ($deleteFailed -gt 0) {
+                            $summaryMessage += "Policies Failed: $deleteFailed`n"
+                        }
+                        if ($mainPolicyUpdated) {
+                            $summaryMessage += "Users Restored to Main Policy: $($allUsersToRestore.Count)`n"
+                        }
+                        elseif ([string]::IsNullOrWhiteSpace($selectedMainPolicy)) {
+                            $summaryMessage += "`nNote: No main policy selected. Users were not restored to any policy."
+                        }
+                    
+                        [System.Windows.MessageBox]::Show(
+                            $summaryMessage,
+                            "Revert Complete",
+                            [System.Windows.MessageBoxButton]::OK,
+                            [System.Windows.MessageBoxImage]::Information
+                        )
+                    
+                        # Refresh the policies list
+                        Load-VacationPolicies
+                    }
+                    catch {
+                        Add-StatusMessage "ERROR: Revert operation failed - $($_.Exception.Message)"
+                        [System.Windows.MessageBox]::Show(
+                            "Failed to revert policies:`n`n$($_.Exception.Message)",
+                            "Error",
+                            [System.Windows.MessageBoxButton]::OK,
+                            [System.Windows.MessageBoxImage]::Error
+                        )
+                    }
+                })
+            
+            # Cancel button handler
+            $CancelRevertBtn.Add_Click({
+                    $revertWindow.Close()
+                })
+            
+            # Show the revert window
+            $revertWindow.ShowDialog() | Out-Null
+        }
+        catch {
+            Add-StatusMessage "ERROR: Failed to open revert window - $($_.Exception.Message)"
+            [System.Windows.MessageBox]::Show(
+                "Failed to open revert vacation mode window:`n`n$($_.Exception.Message)",
                 "Error",
                 [System.Windows.MessageBoxButton]::OK,
                 [System.Windows.MessageBoxImage]::Error
