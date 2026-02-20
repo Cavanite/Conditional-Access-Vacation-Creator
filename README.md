@@ -20,6 +20,8 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\Run-VacationMode.ps1
 ```
 
+**Or download the ZIP using the <> Code button**
+
 ## Usage
 
 1. **Sign In**: Click "Sign In to Microsoft Graph" and authenticate
