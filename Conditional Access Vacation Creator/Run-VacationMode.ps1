@@ -67,7 +67,7 @@ foreach ($module in $modules) {
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Conditional Access Vacation Creator" Height="800" Width="1200"
+    Title="Conditional Access Vacation Creator" Height="900" Width="1300"
     WindowStartupLocation="CenterScreen" Topmost="False">
     <Grid>
         <Grid.RowDefinitions>
@@ -96,8 +96,8 @@ foreach ($module in $modules) {
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="260"/>
                     </Grid.RowDefinitions>
@@ -128,7 +128,10 @@ foreach ($module in $modules) {
                     <ListBox Grid.Row="2" Name="UsersListBox" 
                              SelectionMode="Multiple"
                              Margin="5"
-                             VerticalAlignment="Stretch"/>
+                             VerticalAlignment="Stretch"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                             ScrollViewer.CanContentScroll="True"/>
                     
                     <Grid Grid.Row="3" Margin="5">
                         <Grid.RowDefinitions>
@@ -217,10 +220,9 @@ foreach ($module in $modules) {
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             
-                            <ComboBox Grid.Column="0" Name="CountryComboBox" 
-                                      Margin="5" Height="30"
-                                      IsEditable="True"
-                                      IsTextSearchEnabled="True"/>
+                            <ListBox Grid.Column="0" Name="CountryComboBox" 
+                                     Margin="5" Height="120"
+                                     SelectionMode="Multiple"/>
                             
                             <Button Grid.Column="1" Name="RefreshCountriesBtn" 
                                     Content="RF" Width="35" Height="30" Margin="0,5,5,5"
@@ -291,18 +293,39 @@ foreach ($module in $modules) {
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         
-                        <TextBlock Grid.Row="0" Text="Ticket Number: *" Margin="5,5,5,2" Foreground="#D13438"/>
+                        <TextBlock Grid.Row="0" Text="Ticket Number:" Margin="5,5,5,2"/>
                         <TextBox Grid.Row="1" Name="TicketNumberTextBox" 
                                  Margin="5,0,5,5" Height="25"/>
+
+                        <CheckBox Grid.Row="2" Name="TicketOptionalCheckBox"
+                                  Content="No ticket number (optional)"
+                                  Margin="5,0,5,5"/>
                         
-                        <TextBlock Grid.Row="2" Text="End Date (dd-mm-yyyy): *" Margin="5,5,5,2" Foreground="#D13438"/>
-                        <TextBox Grid.Row="3" Name="EndDateTextBox" 
+                        <TextBlock Grid.Row="3" Text="Start Date (dd-mm-yyyy): *" Margin="5,5,5,2" Foreground="#D13438"/>
+                        <TextBox Grid.Row="4" Name="StartDateTextBox" 
                                  Margin="5,0,5,5" Height="25"/>
+
+                        <CheckBox Grid.Row="5" Name="StartDateOptionalCheckBox"
+                                  Content="No start date (optional)"
+                                  Margin="5,0,5,5"/>
+
+                        <TextBlock Grid.Row="6" Text="End Date (dd-mm-yyyy): *" Margin="5,5,5,2" Foreground="#D13438"/>
+                        <TextBox Grid.Row="7" Name="EndDateTextBox" 
+                                 Margin="5,0,5,5" Height="25"/>
+
+                        <CheckBox Grid.Row="8" Name="EndDateOptionalCheckBox"
+                                  Content="No end date (optional)"
+                                  Margin="5,0,5,5"/>
                         
-                        <TextBlock Grid.Row="4" Text="Policy Name:" Margin="5,5,5,2"/>
-                        <TextBox Grid.Row="5" Name="PolicyNameTextBox" 
+                        <TextBlock Grid.Row="9" Text="Policy Name:" Margin="5,5,5,2"/>
+                        <TextBox Grid.Row="10" Name="PolicyNameTextBox" 
                                  Margin="5,0,5,5" Height="25" IsReadOnly="True"
                                  Background="#F0F0F0"/>
                     </Grid>
@@ -369,7 +392,11 @@ $CountryComboBox = $window.FindName("CountryComboBox")
 $UserCurrentLocationComboBox = $window.FindName("UserCurrentLocationComboBox")
 $ExistingPolicyComboBox = $window.FindName("ExistingPolicyComboBox")
 $TicketNumberTextBox = $window.FindName("TicketNumberTextBox")
+$TicketOptionalCheckBox = $window.FindName("TicketOptionalCheckBox")
+$StartDateTextBox = $window.FindName("StartDateTextBox")
+$StartDateOptionalCheckBox = $window.FindName("StartDateOptionalCheckBox")
 $EndDateTextBox = $window.FindName("EndDateTextBox")
+$EndDateOptionalCheckBox = $window.FindName("EndDateOptionalCheckBox")
 $PolicyNameTextBox = $window.FindName("PolicyNameTextBox")
 $PolicyDescriptionTextBox = $window.FindName("PolicyDescriptionTextBox")
 $StatusTextBox = $window.FindName("StatusTextBox")
@@ -478,17 +505,47 @@ function Add-StatusMessage {
 # Function to update policy name based on selected users
 function Update-PolicyName {
     $selectedUsers = $UsersListBox.SelectedItems
-    $selectedCountry = $CountryComboBox.SelectedItem
+    $selectedCountries = @($CountryComboBox.SelectedItems)
     $ticketNumber = $TicketNumberTextBox.Text.Trim()
+    $startDate = $StartDateTextBox.Text.Trim()
     $endDate = $EndDateTextBox.Text.Trim()
+    $ticketOptional = [bool]$TicketOptionalCheckBox.IsChecked
+    $startDateOptional = [bool]$StartDateOptionalCheckBox.IsChecked
+    $endDateOptional = [bool]$EndDateOptionalCheckBox.IsChecked
     
     # Set placeholders if empty
-    if ([string]::IsNullOrWhiteSpace($ticketNumber)) { $ticketNumber = "TICKETNUMBER" }
-    if ([string]::IsNullOrWhiteSpace($endDate)) { $endDate = "ENDDATE" }
-    if ([string]::IsNullOrWhiteSpace($selectedCountry)) { $selectedCountry = "COUNTRY" }
+    if ($ticketOptional -and [string]::IsNullOrWhiteSpace($ticketNumber)) {
+        $ticketNumber = "NOTICKET"
+    }
+    elseif ([string]::IsNullOrWhiteSpace($ticketNumber)) {
+        $ticketNumber = "TICKETNUMBER"
+    }
+    if ($startDateOptional -and [string]::IsNullOrWhiteSpace($startDate)) {
+        $startDate = "NOSTARTDATE"
+    }
+    elseif ([string]::IsNullOrWhiteSpace($startDate)) {
+        $startDate = "STARTDATE"
+    }
+
+    if ($endDateOptional -and [string]::IsNullOrWhiteSpace($endDate)) {
+        $endDate = "NOENDDATE"
+    }
+    elseif ([string]::IsNullOrWhiteSpace($endDate)) {
+        $endDate = "ENDDATE"
+    }
+
+    if ($selectedCountries.Count -eq 0) {
+        $selectedCountry = "COUNTRY"
+    }
+    elseif ($selectedCountries.Count -eq 1) {
+        $selectedCountry = [string]$selectedCountries[0]
+    }
+    else {
+        $selectedCountry = "MULTICOUNTRY-$($selectedCountries.Count)"
+    }
     
     if ($selectedUsers.Count -eq 0) {
-        $PolicyNameTextBox.Text = "GEO-USERNAME-$selectedCountry-$ticketNumber-$endDate-VACATIONMODE"
+        $PolicyNameTextBox.Text = "GEO-USERNAME-$selectedCountry-$ticketNumber-$startDate-$endDate-VACATIONMODE"
     }
     elseif ($selectedUsers.Count -eq 1) {
         # Extract username from display format "Name (upn)"
@@ -499,7 +556,7 @@ function Update-PolicyName {
         else {
             $username = ($userText -split '@')[0]
         }
-        $PolicyNameTextBox.Text = "GEO-$username-$selectedCountry-$ticketNumber-$endDate-VACATIONMODE"
+        $PolicyNameTextBox.Text = "GEO-$username-$selectedCountry-$ticketNumber-$startDate-$endDate-VACATIONMODE"
     }
     else {
         # Multiple users - use first username
@@ -510,14 +567,14 @@ function Update-PolicyName {
         else {
             $username = ($userText -split '@')[0]
         }
-        $PolicyNameTextBox.Text = "GEO-$username-Plus$($selectedUsers.Count - 1)-$selectedCountry-$ticketNumber-$endDate-VACATIONMODE"
+        $PolicyNameTextBox.Text = "GEO-$username-Plus$($selectedUsers.Count - 1)-$selectedCountry-$ticketNumber-$startDate-$endDate-VACATIONMODE"
     }
 }
 
 Add-StatusMessage "Application started. Please select users and destination country."
 
 # Set default policy name
-$PolicyNameTextBox.Text = "GEO-USERNAME-COUNTRY-TICKETNUMBER-dd-mm-yyyy-VACATIONMODE"
+$PolicyNameTextBox.Text = "GEO-USERNAME-COUNTRY-TICKETNUMBER-STARTDATE-ENDDATE-VACATIONMODE"
 
 # Disable Refresh Users button until signed in
 $RefreshUsersBtn.IsEnabled = $false
@@ -535,6 +592,44 @@ $CountryComboBox.Add_SelectionChanged({
 
 # Update policy name when ticket number changes
 $TicketNumberTextBox.Add_TextChanged({
+        Update-PolicyName
+    })
+
+$TicketOptionalCheckBox.Add_Checked({
+        $TicketNumberTextBox.Text = ""
+        $TicketNumberTextBox.IsEnabled = $false
+        Update-PolicyName
+    })
+
+$TicketOptionalCheckBox.Add_Unchecked({
+        $TicketNumberTextBox.IsEnabled = $true
+        Update-PolicyName
+    })
+
+$StartDateOptionalCheckBox.Add_Checked({
+        $StartDateTextBox.Text = ""
+        $StartDateTextBox.IsEnabled = $false
+        Update-PolicyName
+    })
+
+$StartDateOptionalCheckBox.Add_Unchecked({
+        $StartDateTextBox.IsEnabled = $true
+        Update-PolicyName
+    })
+
+$EndDateOptionalCheckBox.Add_Checked({
+        $EndDateTextBox.Text = ""
+        $EndDateTextBox.IsEnabled = $false
+        Update-PolicyName
+    })
+
+$EndDateOptionalCheckBox.Add_Unchecked({
+        $EndDateTextBox.IsEnabled = $true
+        Update-PolicyName
+    })
+
+# Update policy name when start date changes
+$StartDateTextBox.Add_TextChanged({
         Update-PolicyName
     })
 
@@ -578,7 +673,7 @@ $SignInBtn.Add_Click({
                 
                     $CountryComboBox.Items.Clear()
                     $UserCurrentLocationComboBox.Items.Clear()
-                    foreach ($location in $namedLocations) {
+                    foreach ($location in ($namedLocations | Sort-Object -Property DisplayName)) {
                         # Store location ID in cache with display name as key
                         $script:NamedLocationsCache[$location.DisplayName] = $location.Id
                         $CountryComboBox.Items.Add($location.DisplayName) | Out-Null
@@ -807,7 +902,7 @@ $RefreshCountriesBtn.Add_Click({
             $script:NamedLocationsCache = @{}
             $CountryComboBox.Items.Clear()
         
-            foreach ($location in $namedLocations) {
+            foreach ($location in ($namedLocations | Sort-Object -Property DisplayName)) {
                 $script:NamedLocationsCache[$location.DisplayName] = $location.Id
                 $CountryComboBox.Items.Add($location.DisplayName) | Out-Null
             }
@@ -850,10 +945,14 @@ $CreatePolicyBtn.Add_Click({
         try {
             # Validate required fields
             $selectedUsers = $UsersListBox.SelectedItems
-            $selectedCountry = $CountryComboBox.SelectedItem
-            $ticketNumber = $TicketNumberTextBox.Text.Trim()
-            $endDate = $EndDateTextBox.Text.Trim()
+            $selectedCountries = @($CountryComboBox.SelectedItems)
             $policyName = $PolicyNameTextBox.Text.Trim()
+            $ticketNumber = $TicketNumberTextBox.Text.Trim()
+            $ticketOptional = [bool]$TicketOptionalCheckBox.IsChecked
+            $startDate = $StartDateTextBox.Text.Trim()
+            $startDateOptional = [bool]$StartDateOptionalCheckBox.IsChecked
+            $endDate = $EndDateTextBox.Text.Trim()
+            $endDateOptional = [bool]$EndDateOptionalCheckBox.IsChecked
         
             # Validate user selection
             if ($selectedUsers.Count -eq 0) {
@@ -862,27 +961,60 @@ $CreatePolicyBtn.Add_Click({
             }
         
             # Validate country selection
-            if ([string]::IsNullOrWhiteSpace($selectedCountry)) {
-                [System.Windows.MessageBox]::Show("Please select a vacation destination (Named Location).", "Validation Error", "OK", "Warning")
+            if ($selectedCountries.Count -eq 0) {
+                [System.Windows.MessageBox]::Show("Please select at least one vacation destination (Named Location).", "Validation Error", "OK", "Warning")
+                return
+            }
+
+            if ([string]::IsNullOrWhiteSpace($policyName)) {
+                [System.Windows.MessageBox]::Show("Policy name cannot be empty.", "Validation Error", "OK", "Warning")
                 return
             }
         
             # Validate ticket number
-            if ([string]::IsNullOrWhiteSpace($ticketNumber)) {
+            if ((-not $ticketOptional) -and [string]::IsNullOrWhiteSpace($ticketNumber)) {
                 [System.Windows.MessageBox]::Show("Please enter a ticket number.", "Validation Error", "OK", "Warning")
+                return
+            }
+
+            # Validate start date
+            if ((-not $startDateOptional) -and [string]::IsNullOrWhiteSpace($startDate)) {
+                [System.Windows.MessageBox]::Show("Please enter a start date (dd-mm-yyyy).", "Validation Error", "OK", "Warning")
+                return
+            }
+
+            # Validate start date format (dd-mm-yyyy)
+            if ((-not [string]::IsNullOrWhiteSpace($startDate)) -and ($startDate -notmatch '^\d{2}-\d{2}-\d{4}$')) {
+                [System.Windows.MessageBox]::Show("Invalid start date format. Please use dd-mm-yyyy format (e.g., 01-01-2026).", "Validation Error", "OK", "Warning")
                 return
             }
         
             # Validate end date
-            if ([string]::IsNullOrWhiteSpace($endDate)) {
+            if ((-not $endDateOptional) -and [string]::IsNullOrWhiteSpace($endDate)) {
                 [System.Windows.MessageBox]::Show("Please enter an end date (dd-mm-yyyy).", "Validation Error", "OK", "Warning")
                 return
             }
         
             # Validate date format (dd-mm-yyyy)
-            if ($endDate -notmatch '^\d{2}-\d{2}-\d{4}$') {
+            if ((-not [string]::IsNullOrWhiteSpace($endDate)) -and ($endDate -notmatch '^\d{2}-\d{2}-\d{4}$')) {
                 [System.Windows.MessageBox]::Show("Invalid date format. Please use dd-mm-yyyy format (e.g., 31-12-2026).", "Validation Error", "OK", "Warning")
                 return
+            }
+
+            # Validate date range
+            if ((-not [string]::IsNullOrWhiteSpace($startDate)) -and (-not [string]::IsNullOrWhiteSpace($endDate))) {
+                $startDateParsed = [DateTime]::MinValue
+                $endDateParsed = [DateTime]::MinValue
+                if ((-not [DateTime]::TryParseExact($startDate, 'dd-MM-yyyy', $null, [System.Globalization.DateTimeStyles]::None, [ref]$startDateParsed)) -or
+                    (-not [DateTime]::TryParseExact($endDate, 'dd-MM-yyyy', $null, [System.Globalization.DateTimeStyles]::None, [ref]$endDateParsed))) {
+                    [System.Windows.MessageBox]::Show("Invalid date value. Please verify start and end dates.", "Validation Error", "OK", "Warning")
+                    return
+                }
+
+                if ($startDateParsed -gt $endDateParsed) {
+                    [System.Windows.MessageBox]::Show("Start date cannot be after end date.", "Validation Error", "OK", "Warning")
+                    return
+                }
             }
         
             # Validate existing policy selection
@@ -907,16 +1039,20 @@ $CreatePolicyBtn.Add_Click({
                 return
             }
         
-            # Get location IDs from cache
-            $vacationLocationId = $null
-            if ($script:namedLocationsCache.ContainsKey($selectedCountry)) {
-                $vacationLocationId = $script:namedLocationsCache[$selectedCountry]
-            }
-        
-            if ([string]::IsNullOrWhiteSpace($vacationLocationId)) {
-                Add-StatusMessage "ERROR: Could not find location ID for: $selectedCountry"
-                [System.Windows.MessageBox]::Show("Could not find location ID for selected vacation country.", "Error", "OK", "Error")
-                return
+            # Resolve all selected vacation location IDs from cache
+            $vacationLocations = @()
+            foreach ($selectedCountry in $selectedCountries) {
+                if ($script:namedLocationsCache.ContainsKey($selectedCountry)) {
+                    $vacationLocations += @{
+                        Name = $selectedCountry
+                        Id   = $script:namedLocationsCache[$selectedCountry]
+                    }
+                }
+                else {
+                    Add-StatusMessage "ERROR: Could not find location ID for: $selectedCountry"
+                    [System.Windows.MessageBox]::Show("Could not find location ID for selected vacation country: $selectedCountry", "Error", "OK", "Error")
+                    return
+                }
             }
         
             # Get user's current location ID
@@ -930,41 +1066,7 @@ $CreatePolicyBtn.Add_Click({
                 [System.Windows.MessageBox]::Show("Could not find location ID for user's current location.", "Error", "OK", "Error")
                 return
             }
-        
-            # Build confirmation message
-            $userList = $selectedUsers -join "`n  - "
-            $confirmMessage = @"
-Are you sure you want to create this Conditional Access Policy?
 
-Policy Name: $policyName
-Ticket Number: $ticketNumber
-End Date: $endDate
-
-Users ($($selectedUsers.Count)):
-  - $userList
-
-Vacation Location: $selectedCountry
-User's Current Location: $selectedUserCurrentLocation
-
-This policy will:
-- BLOCK access from all locations EXCEPT:
-  * The vacation destination ($selectedCountry)
-  * The user's current location ($selectedUserCurrentLocation)
-- Be created in ENABLED state
-
-Do you want to proceed?
-"@
-        
-            # Show confirmation dialog
-            $result = [System.Windows.MessageBox]::Show($confirmMessage, "Confirm Policy Creation", "YesNo", "Question")
-        
-            if ($result -ne "Yes") {
-                Add-StatusMessage "Policy creation cancelled by user."
-                return
-            }
-        
-            Add-StatusMessage "Creating Conditional Access policy..."
-        
             # Map user display names to GUIDs
             $userGuids = @()
             foreach ($userDisplay in $selectedUsers) {
@@ -975,13 +1077,52 @@ Do you want to proceed?
                     Add-StatusMessage "WARNING: Could not find GUID for user: $userDisplay"
                 }
             }
-        
+
             if ($userGuids.Count -eq 0) {
                 Add-StatusMessage "ERROR: No valid user GUIDs found."
                 [System.Windows.MessageBox]::Show("Could not find GUIDs for selected users. Please refresh the user list.", "Error", "OK", "Error")
                 return
             }
+
+            # Build confirmation message
+            $userList = $selectedUsers -join "`n  - "
+            $countryList = ($vacationLocations | ForEach-Object { $_.Name }) -join "`n  - "
+            $ticketLabel = if ($ticketOptional -and [string]::IsNullOrWhiteSpace($ticketNumber)) { "(optional) none" } else { $ticketNumber }
+            $startDateLabel = if ($startDateOptional -and [string]::IsNullOrWhiteSpace($startDate)) { "(optional) none" } else { $startDate }
+            $endDateLabel = if ($endDateOptional -and [string]::IsNullOrWhiteSpace($endDate)) { "(optional) none" } else { $endDate }
+            $confirmMessage = @"
+Are you sure you want to create a vacation mode policy?
+
+Policy Name: $policyName
+Ticket Number: $ticketLabel
+Start Date: $startDateLabel
+End Date: $endDateLabel
+
+Users ($($selectedUsers.Count)):
+    - $userList
+
+Vacation Locations ($($vacationLocations.Count)):
+    - $countryList
+
+User's Current Location: $selectedUserCurrentLocation
+
+This will create ONE enabled Conditional Access policy with all selected vacation locations.
+Do you want to proceed?
+"@
         
+            # Show confirmation dialog
+            $result = [System.Windows.MessageBox]::Show($confirmMessage, "Confirm Policy Creation", "YesNo", "Question")
+        
+            if ($result -ne "Yes") {
+                Add-StatusMessage "Policy creation cancelled by user."
+                return
+            }
+
+            Add-StatusMessage "Creating Conditional Access policy..."
+
+            $vacationLocationIds = @($vacationLocations | ForEach-Object { $_.Id })
+            $excludeLocationIds = @($vacationLocationIds + $userLocationId | Select-Object -Unique)
+
             # Build the policy object
             $policyObject = @{
                 "displayName"   = $policyName
@@ -999,7 +1140,7 @@ Do you want to proceed?
                     }
                     "locations"    = @{
                         "includeLocations" = @("All")
-                        "excludeLocations" = @($vacationLocationId, $userLocationId)
+                        "excludeLocations" = $excludeLocationIds
                     }
                 }
                 "grantControls" = @{
@@ -1007,15 +1148,14 @@ Do you want to proceed?
                     "builtInControls" = @("block")
                 }
             }
-        
+
             # Create the policy using Microsoft Graph
             $policyJson = $policyObject | ConvertTo-Json -Depth 10
-        
+
             Add-StatusMessage "Sending policy creation request to Microsoft Graph..."
-        
             $newPolicy = Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies" -Body $policyJson -ContentType "application/json"
-        
-            Add-StatusMessage "SUCCESS: Conditional Access policy created!"
+
+            Add-StatusMessage "SUCCESS: Policy created"
             Add-StatusMessage "Policy ID: $($newPolicy.id)"
             Add-StatusMessage "Policy Name: $($newPolicy.displayName)"
             Add-StatusMessage "State: $($newPolicy.state)"
@@ -1086,7 +1226,7 @@ Do you want to proceed?
             }
         
             # Show success message
-            $successMsg = "Conditional Access policy created successfully!`n`nPolicy Name: $policyName`nPolicy ID: $($newPolicy.id)`nState: enabled`n`n"
+            $successMsg = "Conditional Access policy created successfully!`n`nCreated policies: 1`nCountries: $($vacationLocations.Count)`nUsers: $($selectedUsers.Count)`nPolicy ID: $($newPolicy.id)`n`n"
         
             if (-not [string]::IsNullOrWhiteSpace($selectedExistingPolicy)) {
                 $successMsg += "Main policy '$selectedExistingPolicy' updated to exclude vacation users.`n`n"
@@ -1652,7 +1792,7 @@ $ExcludeCountriesBtn.Add_Click({
                         $namedLocations = Get-MgIdentityConditionalAccessNamedLocation -All -ErrorAction Stop
                         $script:NamedLocationsCache = @{}
                         $CountryComboBox.Items.Clear()
-                        foreach ($location in $namedLocations) {
+                        foreach ($location in ($namedLocations | Sort-Object -Property DisplayName)) {
                             $script:NamedLocationsCache[$location.DisplayName] = $location.Id
                             $CountryComboBox.Items.Add($location.DisplayName) | Out-Null
                         }
