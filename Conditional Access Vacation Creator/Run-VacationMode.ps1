@@ -38,8 +38,6 @@ $ErrorActionPreference = 'Stop'
 #region Script Initialization
 $ScriptRoot = $PSScriptRoot
 $ModulesPath = Join-Path -Path $ScriptRoot -ChildPath 'Modules'
-$ResourcesPath = Join-Path -Path $ScriptRoot -ChildPath 'Resources'
-
 
 # Add required assemblies for WPF
 Add-Type -AssemblyName PresentationFramework
@@ -398,7 +396,6 @@ $StartDateOptionalCheckBox = $window.FindName("StartDateOptionalCheckBox")
 $EndDateTextBox = $window.FindName("EndDateTextBox")
 $EndDateOptionalCheckBox = $window.FindName("EndDateOptionalCheckBox")
 $PolicyNameTextBox = $window.FindName("PolicyNameTextBox")
-$PolicyDescriptionTextBox = $window.FindName("PolicyDescriptionTextBox")
 $StatusTextBox = $window.FindName("StatusTextBox")
 $RefreshUsersBtn = $window.FindName("RefreshUsersBtn")
 $SelectAllUsersBtn = $window.FindName("SelectAllUsersBtn")
@@ -772,15 +769,6 @@ $RefreshUsersBtn.Add_Click({
                 '*system*'
             )
         
-            # Admin role patterns to exclude
-            $adminRolePatterns = @(
-                '*admin*',
-                '*administrator*',
-                '*privileged*',
-                '*global*',
-                '*security*'
-            )
-        
             # Clear and populate the cache as a hashtable
             $script:UserCache = @{}
             $UsersListBox.Items.Clear()
@@ -789,10 +777,7 @@ $RefreshUsersBtn.Add_Click({
             foreach ($user in $users) {
                 # Check if user is external (contains #EXT# in UPN)
                 $isExternal = $user.UserPrincipalName -like '*#EXT#*'
-            
-                # Check if user has a valid license assigned
-                $hasLicense = $null -ne $user.AssignedLicenses -and $user.AssignedLicenses.Count -gt 0
-            
+
                 # Check if user matches any exclusion pattern
                 $shouldExclude = $false
                 foreach ($pattern in $excludePatterns) {
