@@ -20,6 +20,8 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\Run-VacationMode.ps1
 ```
 
+**Or download the ZIP using the <> Code button**
+
 ## Usage
 
 1. **Sign In**: Click "Sign In to Microsoft Graph" and authenticate
@@ -83,8 +85,3 @@ Run as Administrator and manually install: `Install-Module Microsoft.Graph -Scop
 Please use the button "Fix Graph Modules" this will solve most of the Authentication related issues.
 
 ### Feature updates
-- Also be able to revert back the vacation mode action.
-   this will include the user from the main policy and delete the Conditional Access policy created for this user.
-
--  The user of the script will be able to get a calendar item so they can import this in there own calendar.
-   This way you will be notified when you need to revert back the changes.
